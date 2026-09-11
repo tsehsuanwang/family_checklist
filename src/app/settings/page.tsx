@@ -198,6 +198,12 @@ export default function SettingsPage() {
           </div>
           <div className="flex gap-3">
             <button
+              onClick={() => router.push("/routines")}
+              className="text-xs font-semibold text-slate-600 hover:text-slate-900 underline"
+            >
+              Routines
+            </button>
+            <button
               onClick={() => router.push("/dashboard")}
               className="text-xs font-semibold text-slate-600 hover:text-slate-900 underline"
             >

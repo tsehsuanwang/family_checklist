@@ -113,6 +113,12 @@ export default function DashboardPage() {
           </div>
           <div className="flex gap-3">
             <button
+              onClick={() => router.push("/routines")}
+              className="text-xs font-semibold text-slate-600 hover:text-slate-900 underline"
+            >
+              Routines
+            </button>
+            <button
               onClick={() => router.push("/settings")}
               className="text-xs font-semibold text-slate-600 hover:text-slate-900 underline"
             >
