@@ -29,26 +29,43 @@ export default function DashboardPage() {
       }
       setUser(data.session.user);
 
-      // Get family
-      const { data: familiesData, error: familiesError } = await supabase
+      // Get or create family
+      const { data: familiesData } = await supabase
         .from("families")
         .select("id")
         .eq("created_by", data.session.user.id)
         .single();
 
-      if (familiesError) {
-        console.error("Error loading family:", familiesError);
-        setLoading(false);
-        return;
+      let finalFamilyId = familiesData?.id;
+
+      // If no family exists, create one
+      if (!finalFamilyId) {
+        const email = data.session.user.email || "";
+        const name = data.session.user.user_metadata?.full_name || email.split("@")[0];
+        const { data: newFamily, error: createError } = await supabase
+          .from("families")
+          .insert([
+            {
+              name: `${name}'s Family`,
+              created_by: data.session.user.id,
+            },
+          ])
+          .select()
+          .single();
+
+        if (createError) {
+          console.error("Error creating family:", createError);
+          setLoading(false);
+          return;
+        }
+        finalFamilyId = newFamily?.id;
       }
 
-      const currentFamilyId = familiesData?.id;
-
-      // Load children from Supabase
+      // Load children
       const { data: childrenData, error: childrenError } = await supabase
         .from("children")
         .select("*")
-        .eq("family_id", currentFamilyId)
+        .eq("family_id", finalFamilyId)
         .order("sort_order", { ascending: true });
 
       if (childrenError) {
@@ -88,6 +105,10 @@ export default function DashboardPage() {
     );
   }
 
+  const handleSelectChild = (childId: string) => {
+    setSelectedChildId(childId);
+  };
+
   return (
     <main className="min-h-screen overflow-hidden px-5 py-6 text-slate-900 sm:px-8">
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-2xl flex-col">
@@ -113,7 +134,9 @@ export default function DashboardPage() {
         </header>
 
         <section className="flex flex-1 flex-col justify-center py-12">
-          <p className="mb-3 text-sm font-bold uppercase tracking-[0.18em] text-blue-600">Hello, {user?.user_metadata?.full_name || user?.email}</p>
+          <p className="mb-3 text-sm font-bold uppercase tracking-[0.18em] text-blue-600">
+            Hello, {user?.user_metadata?.full_name || user?.email}
+          </p>
           <h1 className="max-w-md text-4xl font-black leading-[1.05] tracking-tight text-slate-950 sm:text-5xl">
             Who is checking in?
           </h1>
@@ -149,7 +172,7 @@ export default function DashboardPage() {
                     key={child.id}
                     type="button"
                     aria-pressed={isSelected}
-                    onClick={() => setSelectedChildId(child.id)}
+                    onClick={() => handleSelectChild(child.id)}
                     className={`profile-button profile-${color} ${isSelected ? "profile-selected" : ""}`}
                   >
                     <span className="profile-avatar" aria-hidden="true">{initials}</span>
@@ -165,7 +188,9 @@ export default function DashboardPage() {
           </div>
 
           <p className="mt-8 text-center text-sm font-medium text-slate-500">
-            {selectedChildId ? `Great choice, ${children.find((c) => c.id === selectedChildId)?.display_name}!` : "Tap your name to begin"}
+            {selectedChildId
+              ? `Great choice, ${children.find((c) => c.id === selectedChildId)?.display_name}!`
+              : "Tap your name to begin"}
           </p>
         </section>
 

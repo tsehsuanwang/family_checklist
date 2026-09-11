@@ -49,7 +49,7 @@ export default function SettingsPage() {
       let currentFamilyId = familiesData?.id;
 
       if (!familiesData || familiesError) {
-        // Create a family if it doesn't exist
+        // Create a family if it doesn't exist (no rows returned)
         const { data: newFamily, error: createError } = await supabase
           .from("families")
           .insert([
@@ -69,6 +69,8 @@ export default function SettingsPage() {
         }
 
         currentFamilyId = newFamily?.id;
+      } else {
+        currentFamilyId = familiesData.id;
       }
 
       setFamilyId(currentFamilyId);
