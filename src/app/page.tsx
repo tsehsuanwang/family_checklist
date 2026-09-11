@@ -1,0 +1,68 @@
+"use client";
+
+import { useState } from "react";
+
+const children = [
+  { name: "Mia", initials: "M", color: "coral", age: "Ready for your routine" },
+  { name: "Leo", initials: "L", color: "mint", age: "Ready for your routine" },
+  { name: "Sofia", initials: "S", color: "sun", age: "Ready for your routine" },
+];
+
+export default function Home() {
+  const [selectedChild, setSelectedChild] = useState<string | null>(null);
+
+  return (
+    <main className="min-h-screen overflow-hidden px-5 py-6 text-slate-900 sm:px-8">
+      <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-2xl flex-col">
+        <header className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className="brand-mark" aria-hidden="true">✓</span>
+            <span className="text-sm font-bold tracking-wide text-slate-700">Family Checklist</span>
+          </div>
+          <span className="rounded-full bg-white/70 px-3 py-1.5 text-xs font-semibold text-slate-500 shadow-sm">Today</span>
+        </header>
+
+        <section className="flex flex-1 flex-col justify-center py-12">
+          <p className="mb-3 text-sm font-bold uppercase tracking-[0.18em] text-blue-600">Let&apos;s get started</p>
+          <h1 className="max-w-md text-4xl font-black leading-[1.05] tracking-tight text-slate-950 sm:text-5xl">
+            Who is checking in?
+          </h1>
+          <p className="mt-4 max-w-sm text-base leading-7 text-slate-600">
+            Pick your profile to see today&apos;s routines.
+          </p>
+
+          <div className="mt-9 grid gap-3" role="group" aria-label="Child profiles">
+            {children.map((child) => {
+              const isSelected = selectedChild === child.name;
+
+              return (
+                <button
+                  key={child.name}
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => setSelectedChild(child.name)}
+                  className={`profile-button profile-${child.color} ${isSelected ? "profile-selected" : ""}`}
+                >
+                  <span className="profile-avatar" aria-hidden="true">{child.initials}</span>
+                  <span className="flex flex-1 flex-col items-start">
+                    <span className="text-xl font-extrabold">{child.name}</span>
+                    <span className="mt-0.5 text-sm font-medium opacity-70">{child.age}</span>
+                  </span>
+                  <span className="profile-arrow" aria-hidden="true">→</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <p className="mt-8 text-center text-sm font-medium text-slate-500">
+            {selectedChild ? `Great choice, ${selectedChild}!` : "Tap your name to begin"}
+          </p>
+        </section>
+
+        <footer className="pb-2 text-center text-xs font-medium text-slate-400">
+          One small step at a time.
+        </footer>
+      </div>
+      </main>
+  );
+}
