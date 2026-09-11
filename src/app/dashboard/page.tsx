@@ -5,16 +5,19 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 
-const children = [
-  { name: "Mia", initials: "M", color: "coral", age: "Ready for your routine" },
-  { name: "Leo", initials: "L", color: "mint", age: "Ready for your routine" },
-  { name: "Sofia", initials: "S", color: "sun", age: "Ready for your routine" },
-];
+interface Child {
+  id: string;
+  display_name: string;
+  avatar_url: string | null;
+  sort_order: number;
+  is_active: boolean;
+}
 
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [selectedChild, setSelectedChild] = useState<string | null>(null);
+  const [children, setChildren] = useState<Child[]>([]);
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -25,6 +28,19 @@ export default function DashboardPage() {
         return;
       }
       setUser(data.session.user);
+
+      // Load children from Supabase
+      const { data: childrenData, error: childrenError } = await supabase
+        .from("children")
+        .select("*")
+        .order("sort_order", { ascending: true });
+
+      if (childrenError) {
+        console.error("Error loading children:", childrenError);
+      } else {
+        setChildren(childrenData || []);
+      }
+
       setLoading(false);
     };
 
@@ -90,30 +106,50 @@ export default function DashboardPage() {
           </p>
 
           <div className="mt-9 grid gap-3" role="group" aria-label="Child profiles">
-            {children.map((child) => {
-              const isSelected = selectedChild === child.name;
-
-              return (
+            {children.length === 0 ? (
+              <p className="text-center text-slate-500">
+                No children yet.{" "}
                 <button
-                  key={child.name}
-                  type="button"
-                  aria-pressed={isSelected}
-                  onClick={() => setSelectedChild(child.name)}
-                  className={`profile-button profile-${child.color} ${isSelected ? "profile-selected" : ""}`}
+                  onClick={() => router.push("/settings")}
+                  className="text-blue-600 hover:underline font-semibold"
                 >
-                  <span className="profile-avatar" aria-hidden="true">{child.initials}</span>
-                  <span className="flex flex-1 flex-col items-start">
-                    <span className="text-xl font-extrabold">{child.name}</span>
-                    <span className="mt-0.5 text-sm font-medium opacity-70">{child.age}</span>
-                  </span>
-                  <span className="profile-arrow" aria-hidden="true">→</span>
+                  Add one in Settings
                 </button>
-              );
-            })}
+              </p>
+            ) : (
+              children.map((child) => {
+                const isSelected = selectedChildId === child.id;
+                const initials = child.display_name
+                  .split(" ")
+                  .map((n) => n[0])
+                  .join("")
+                  .toUpperCase()
+                  .slice(0, 2);
+                const colors = ["coral", "mint", "sun"];
+                const color = colors[children.indexOf(child) % colors.length];
+
+                return (
+                  <button
+                    key={child.id}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => setSelectedChildId(child.id)}
+                    className={`profile-button profile-${color} ${isSelected ? "profile-selected" : ""}`}
+                  >
+                    <span className="profile-avatar" aria-hidden="true">{initials}</span>
+                    <span className="flex flex-1 flex-col items-start">
+                      <span className="text-xl font-extrabold">{child.display_name}</span>
+                      <span className="mt-0.5 text-sm font-medium opacity-70">Ready for your routine</span>
+                    </span>
+                    <span className="profile-arrow" aria-hidden="true">→</span>
+                  </button>
+                );
+              })
+            )}
           </div>
 
           <p className="mt-8 text-center text-sm font-medium text-slate-500">
-            {selectedChild ? `Great choice, ${selectedChild}!` : "Tap your name to begin"}
+            {selectedChildId ? `Great choice, ${children.find((c) => c.id === selectedChildId)?.display_name}!` : "Tap your name to begin"}
           </p>
         </section>
 
