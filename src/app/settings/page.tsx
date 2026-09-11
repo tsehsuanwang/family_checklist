@@ -16,6 +16,7 @@ interface Child {
 export default function SettingsPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+  const [familyId, setFamilyId] = useState<string | null>(null);
   const [children, setChildren] = useState<Child[]>([]);
   const [newChildName, setNewChildName] = useState("");
   const [fullName, setFullName] = useState("");
@@ -38,10 +39,45 @@ export default function SettingsPage() {
       const name = sessionData.session.user.user_metadata?.full_name || "";
       setFullName(name);
 
+      // Get or create family
+      const { data: familiesData, error: familiesError } = await supabase
+        .from("families")
+        .select("id")
+        .eq("created_by", sessionData.session.user.id)
+        .single();
+
+      let currentFamilyId = familiesData?.id;
+
+      if (!familiesData || familiesError) {
+        // Create a family if it doesn't exist
+        const { data: newFamily, error: createError } = await supabase
+          .from("families")
+          .insert([
+            {
+              name: `${name || sessionData.session.user.email?.split("@")[0]}'s Family`,
+              created_by: sessionData.session.user.id,
+            },
+          ])
+          .select()
+          .single();
+
+        if (createError) {
+          console.error("Error creating family:", createError);
+          setError("Failed to set up your family");
+          setLoading(false);
+          return;
+        }
+
+        currentFamilyId = newFamily?.id;
+      }
+
+      setFamilyId(currentFamilyId);
+
       // Load children from Supabase
       const { data, error: childrenError } = await supabase
         .from("children")
         .select("*")
+        .eq("family_id", currentFamilyId)
         .order("sort_order", { ascending: true });
 
       if (childrenError) {
@@ -81,7 +117,7 @@ export default function SettingsPage() {
 
   const handleAddChild = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newChildName.trim() || !user) return;
+    if (!newChildName.trim() || !user || !familyId) return;
 
     setSubmitting(true);
     setError("");
@@ -91,7 +127,7 @@ export default function SettingsPage() {
         .from("children")
         .insert([
           {
-            family_id: user.id, // Using user ID as family_id for now
+            family_id: familyId,
             display_name: newChildName.trim(),
             sort_order: children.length,
             is_active: true,

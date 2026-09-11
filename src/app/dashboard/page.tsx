@@ -29,10 +29,26 @@ export default function DashboardPage() {
       }
       setUser(data.session.user);
 
+      // Get family
+      const { data: familiesData, error: familiesError } = await supabase
+        .from("families")
+        .select("id")
+        .eq("created_by", data.session.user.id)
+        .single();
+
+      if (familiesError) {
+        console.error("Error loading family:", familiesError);
+        setLoading(false);
+        return;
+      }
+
+      const currentFamilyId = familiesData?.id;
+
       // Load children from Supabase
       const { data: childrenData, error: childrenError } = await supabase
         .from("children")
         .select("*")
+        .eq("family_id", currentFamilyId)
         .order("sort_order", { ascending: true });
 
       if (childrenError) {
