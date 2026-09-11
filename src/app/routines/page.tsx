@@ -77,7 +77,7 @@ export default function RoutinesPage() {
       const [{ data: childData, error: childError }, { data: routineData, error: routineError }] =
         await Promise.all([
           supabase.from("children").select("id, display_name").eq("family_id", currentFamilyId).order("sort_order"),
-          supabase.from("routines").select("id, name, description").eq("family_id", currentFamilyId).eq("is_active", true).order("sort_order"),
+          supabase.from("routines").select("id, name, description").eq("family_id", currentFamilyId).eq("is_active", true).order("created_at"),
         ]);
 
       if (childError || routineError) {
@@ -127,7 +127,6 @@ export default function RoutinesPage() {
         name: newRoutineName.trim(),
         description: newRoutineDescription.trim() || null,
         created_by: (await supabase.auth.getUser()).data.user?.id,
-        sort_order: routines.length,
       })
       .select("id, name, description")
       .single();
