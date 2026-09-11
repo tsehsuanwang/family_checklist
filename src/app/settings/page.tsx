@@ -44,12 +44,19 @@ export default function SettingsPage() {
         .from("families")
         .select("id")
         .eq("created_by", sessionData.session.user.id)
-        .single();
+        .maybeSingle();
+
+      if (familiesError) {
+        console.error("Error loading family:", familiesError);
+        setError(`Failed to load your family: ${familiesError.message}`);
+        setLoading(false);
+        return;
+      }
 
       let currentFamilyId = familiesData?.id;
 
-      if (!familiesData || familiesError) {
-        // Create a family if it doesn't exist (no rows returned)
+      if (!familiesData) {
+        // Create a family if no family exists yet.
         const { data: newFamily, error: createError } = await supabase
           .from("families")
           .insert([
@@ -63,7 +70,7 @@ export default function SettingsPage() {
 
         if (createError) {
           console.error("Error creating family:", createError);
-          setError("Failed to set up your family");
+          setError(`Failed to set up your family: ${createError.message}`);
           setLoading(false);
           return;
         }
@@ -119,7 +126,12 @@ export default function SettingsPage() {
 
   const handleAddChild = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newChildName.trim() || !user || !familyId) return;
+    if (!newChildName.trim() || !user) return;
+
+    if (!familyId) {
+      setError("Your family is still being set up. Refresh the page and try again.");
+      return;
+    }
 
     setSubmitting(true);
     setError("");
@@ -259,10 +271,10 @@ export default function SettingsPage() {
                 />
                 <button
                   type="submit"
-                  disabled={submitting || !newChildName.trim()}
+                  disabled={submitting || !newChildName.trim() || !familyId}
                   className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {submitting ? "Adding..." : "Add"}
+                  {submitting ? "Adding..." : familyId ? "Add" : "Setting up..."}
                 </button>
               </div>
             </form>
