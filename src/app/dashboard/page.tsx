@@ -42,23 +42,17 @@ export default function DashboardPage() {
       if (!finalFamilyId) {
         const email = data.session.user.email || "";
         const name = data.session.user.user_metadata?.full_name || email.split("@")[0];
-        const { data: newFamily, error: createError } = await supabase
-          .from("families")
-          .insert([
-            {
-              name: `${name}'s Family`,
-              created_by: data.session.user.id,
-            },
-          ])
-          .select()
-          .single();
+        const { data: newFamilyId, error: createError } = await supabase.rpc(
+          "create_family_for_current_user",
+          { family_name: `${name}'s Family` },
+        );
 
         if (createError) {
           console.error("Error creating family:", createError);
           setLoading(false);
           return;
         }
-        finalFamilyId = newFamily?.id;
+        finalFamilyId = newFamilyId;
       }
 
       // Load children

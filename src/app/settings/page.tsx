@@ -56,17 +56,13 @@ export default function SettingsPage() {
       let currentFamilyId = familiesData?.id;
 
       if (!familiesData) {
-        // Create a family if no family exists yet.
-        const { data: newFamily, error: createError } = await supabase
-          .from("families")
-          .insert([
-            {
-              name: `${name || sessionData.session.user.email?.split("@")[0]}'s Family`,
-              created_by: sessionData.session.user.id,
-            },
-          ])
-          .select()
-          .single();
+        // Use a database function so family creation and its RLS boundary stay together.
+        const { data: newFamilyId, error: createError } = await supabase.rpc(
+          "create_family_for_current_user",
+          {
+            family_name: `${name || sessionData.session.user.email?.split("@")[0]}'s Family`,
+          },
+        );
 
         if (createError) {
           console.error("Error creating family:", createError);
@@ -75,7 +71,7 @@ export default function SettingsPage() {
           return;
         }
 
-        currentFamilyId = newFamily?.id;
+        currentFamilyId = newFamilyId;
       } else {
         currentFamilyId = familiesData.id;
       }
