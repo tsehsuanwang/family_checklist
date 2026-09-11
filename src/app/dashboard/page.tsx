@@ -64,16 +64,24 @@ export default function DashboardPage() {
             <span className="brand-mark" aria-hidden="true">✓</span>
             <span className="text-sm font-bold tracking-wide text-slate-700">Family Checklist</span>
           </div>
-          <button
-            onClick={handleLogout}
-            className="text-xs font-semibold text-slate-600 hover:text-slate-900 underline"
-          >
-            Logout
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => router.push("/settings")}
+              className="text-xs font-semibold text-slate-600 hover:text-slate-900 underline"
+            >
+              Settings
+            </button>
+            <button
+              onClick={handleLogout}
+              className="text-xs font-semibold text-slate-600 hover:text-slate-900 underline"
+            >
+              Logout
+            </button>
+          </div>
         </header>
 
         <section className="flex flex-1 flex-col justify-center py-12">
-          <p className="mb-3 text-sm font-bold uppercase tracking-[0.18em] text-blue-600">Hello, {user?.email}</p>
+          <p className="mb-3 text-sm font-bold uppercase tracking-[0.18em] text-blue-600">Hello, {user?.user_metadata?.full_name || user?.email}</p>
           <h1 className="max-w-md text-4xl font-black leading-[1.05] tracking-tight text-slate-950 sm:text-5xl">
             Who is checking in?
           </h1>
