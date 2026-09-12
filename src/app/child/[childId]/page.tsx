@@ -37,6 +37,7 @@ export default function ChildChecklistPage() {
   const childId = params.childId;
   const [child, setChild] = useState<Child | null>(null);
   const [routines, setRoutines] = useState<Routine[]>([]);
+  const [selectedRoutineId, setSelectedRoutineId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -148,20 +149,32 @@ export default function ChildChecklistPage() {
 
   const totalTasks = routines.reduce((total, routine) => total + routine.tasks.length, 0);
   const completedTasks = routines.reduce((total, routine) => total + routine.completedTaskIds.length, 0);
+  const overallProgress = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  const getRoutineProgress = (routine: Routine) => {
+    const total = routine.tasks.length;
+    const completed = routine.completedTaskIds.length;
+    return total ? Math.round((completed / total) * 100) : 0;
+  };
+
+  const selectedRoutine = routines.find((routine) => routine.assignmentId === selectedRoutineId);
 
   return (
-    <main className="min-h-screen px-5 py-6 text-slate-900 sm:px-8">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#eff6ff,transparent_48%)] px-5 py-6 text-slate-900 sm:px-8">
       <div className="mx-auto max-w-2xl">
-        <header className="mb-10 flex items-center justify-between">
+        <header className="mb-8 flex items-center justify-between">
           <button onClick={() => router.push("/dashboard")} className="text-sm font-semibold text-slate-600 underline">Back to profiles</button>
           <button onClick={() => router.push("/routines")} className="text-sm font-semibold text-slate-600 underline">Edit routines</button>
         </header>
 
-        <section className="mb-8">
-          <p className="mb-2 text-sm font-bold uppercase tracking-[0.18em] text-blue-600">Today&apos;s checklist</p>
+        <section className="mb-8 rounded-2xl border border-blue-100 bg-white/80 p-5 shadow-sm backdrop-blur sm:p-7">
+          <p className="mb-2 text-sm font-bold uppercase tracking-[0.18em] text-blue-600">Today&apos;s rhythm</p>
           <h1 className="text-4xl font-black tracking-tight text-slate-950">{child?.display_name}</h1>
-          <p className="mt-3 text-slate-600">{completedTasks} of {totalTasks} steps complete</p>
-          <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: totalTasks ? `${(completedTasks / totalTasks) * 100}%` : "0%" }} /></div>
+          <div className="mt-5 flex items-end justify-between gap-4">
+            <p className="text-slate-600">{completedTasks} of {totalTasks} steps complete</p>
+            <span className="text-3xl font-black text-blue-600">{overallProgress}%</span>
+          </div>
+          <div className="mt-3 h-3 overflow-hidden rounded-full bg-blue-100"><div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${overallProgress}%` }} /></div>
         </section>
 
         {error && <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
@@ -169,21 +182,52 @@ export default function ChildChecklistPage() {
         {routines.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-slate-500">No routines are scheduled for today.</div>
         ) : (
-          <div className="space-y-5">{routines.map((routine) => {
-            const completed = routine.completedTaskIds.length;
-            return <article key={routine.assignmentId} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="text-2xl font-black text-slate-950">{routine.name}</h2>
-              {routine.description && <p className="mt-1 text-sm text-slate-500">{routine.description}</p>}
-              <p className="mt-4 mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">{completed} of {routine.tasks.length} complete</p>
-              <div className="space-y-2">{routine.tasks.map((task) => {
-                const isComplete = routine.completedTaskIds.includes(task.id);
-                return <label key={task.id} className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition ${isComplete ? "border-emerald-200 bg-emerald-50" : "border-slate-200"}`}>
-                  <input type="checkbox" checked={isComplete} onChange={() => toggleTask(routine, task.id)} className="h-5 w-5 accent-blue-600" />
-                  <span className={isComplete ? "text-slate-500 line-through" : "font-medium text-slate-900"}>{task.title}</span>
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {routines.map((routine) => {
+                const progress = getRoutineProgress(routine);
+                const isComplete = progress === 100 && routine.tasks.length > 0;
+                const isSelected = selectedRoutineId === routine.assignmentId;
+                return <button
+                  key={routine.assignmentId}
+                  type="button"
+                  onClick={() => setSelectedRoutineId(isSelected ? null : routine.assignmentId)}
+                  aria-expanded={isSelected}
+                  className={`rounded-2xl border-2 p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${isSelected ? "border-blue-600 bg-blue-50" : isComplete ? "border-emerald-200 bg-emerald-50" : "border-white bg-white"}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-xl font-black text-slate-950">{routine.name}</span>
+                    <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-4 text-sm font-black ${isComplete ? "border-emerald-400 text-emerald-600" : "border-blue-200 text-blue-600"}`}>{isComplete ? "✓" : `${progress}%`}</span>
+                  </div>
+                  {routine.description && <p className="mt-2 line-clamp-2 text-sm text-slate-500">{routine.description}</p>}
+                  <div className="mt-5 flex items-center justify-between text-xs font-bold uppercase tracking-wide">
+                    <span className={isComplete ? "text-emerald-600" : "text-slate-500"}>{isComplete ? "Complete" : progress ? "In progress" : "Ready to start"}</span>
+                    <span className="text-slate-400">{routine.completedTaskIds.length}/{routine.tasks.length} steps</span>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full transition-all ${isComplete ? "bg-emerald-500" : "bg-blue-600"}`} style={{ width: `${progress}%` }} /></div>
+                </button>;
+              })}
+            </div>
+
+            {selectedRoutine && <article className="mt-6 rounded-2xl border-2 border-blue-200 bg-white p-5 shadow-md sm:p-7">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Routine checklist</p>
+                  <h2 className="mt-1 text-3xl font-black text-slate-950">{selectedRoutine.name}</h2>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-bold ${getRoutineProgress(selectedRoutine) === 100 ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>{getRoutineProgress(selectedRoutine) === 100 ? "Complete" : `${getRoutineProgress(selectedRoutine)}% done`}</span>
+              </div>
+              {selectedRoutine.description && <p className="mt-2 text-sm text-slate-500">{selectedRoutine.description}</p>}
+              <div className="mt-6 space-y-3">{selectedRoutine.tasks.map((task) => {
+                const isComplete = selectedRoutine.completedTaskIds.includes(task.id);
+                return <label key={task.id} className={`flex cursor-pointer items-center gap-3 rounded-xl border-2 p-4 transition ${isComplete ? "border-emerald-200 bg-emerald-50" : "border-slate-200 hover:border-blue-300"}`}>
+                  <input type="checkbox" checked={isComplete} onChange={() => toggleTask(selectedRoutine, task.id)} className="h-6 w-6 accent-blue-600" />
+                  <span className={isComplete ? "font-medium text-slate-500 line-through" : "font-semibold text-slate-900"}>{task.title}</span>
+                  {isComplete && <span className="ml-auto text-lg font-black text-emerald-600">✓</span>}
                 </label>;
               })}</div>
-            </article>;
-          })}</div>
+            </article>}
+          </>
         )}
       </div>
     </main>
