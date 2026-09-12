@@ -30,13 +30,13 @@ export default function DashboardPage() {
       setUser(data.session.user);
 
       // Get or create family
-      const { data: familiesData } = await supabase
-        .from("families")
-        .select("id")
-        .eq("created_by", data.session.user.id)
-        .single();
+      const { data: familyMember } = await supabase
+        .from("family_members")
+        .select("family_id")
+        .eq("user_id", data.session.user.id)
+        .maybeSingle();
 
-      let finalFamilyId = familiesData?.id;
+      let finalFamilyId = familyMember?.family_id;
 
       // If no family exists, create one
       if (!finalFamilyId) {
@@ -110,7 +110,7 @@ export default function DashboardPage() {
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <span className="brand-mark" aria-hidden="true">✓</span>
-            <span className="text-sm font-bold tracking-wide text-slate-700">Family Checklist</span>
+            <span className="text-sm font-bold tracking-wide text-slate-700">Kusuma App</span>
           </div>
           <div className="flex gap-3">
             <button

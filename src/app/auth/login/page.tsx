@@ -48,7 +48,7 @@ export default function LoginPage() {
             <span className="brand-mark" aria-hidden="true">✓</span>
           </div>
           <h1 className="text-3xl font-black leading-tight text-slate-950">
-            Family Checklist
+            Kusuma App
           </h1>
           <p className="mt-2 text-sm text-slate-600">
             {isSigningUp ? "Create your parent account" : "Welcome back"}

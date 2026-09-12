@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Family Checklist",
+  title: "Kusuma App",
   description: "Daily routines made simple for children and families.",
-  applicationName: "Family Checklist",
+  applicationName: "Kusuma App",
   manifest: "/manifest.webmanifest",
 };
 

@@ -41,6 +41,10 @@ const weekdays = [
 ];
 
 const allDays = weekdays.map((day) => day.value);
+const getToday = () => {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
 const mathOperations = [
   { value: "addition", label: "Addition" },
   { value: "subtraction", label: "Subtraction" },
@@ -82,10 +86,10 @@ export default function RoutinesPage() {
       }
 
       const user = sessionData.session.user;
-      const { data: family, error: familyError } = await supabase
-        .from("families")
-        .select("id")
-        .eq("created_by", user.id)
+      const { data: familyMember, error: familyError } = await supabase
+        .from("family_members")
+        .select("family_id")
+        .eq("user_id", user.id)
         .maybeSingle();
 
       if (familyError) {
@@ -94,7 +98,7 @@ export default function RoutinesPage() {
         return;
       }
 
-      let currentFamilyId = family?.id;
+      let currentFamilyId = familyMember?.family_id;
       if (!currentFamilyId) {
         const name = user.user_metadata?.full_name || user.email?.split("@")[0] || "Your";
         const { data: newFamilyId, error: createError } = await supabase.rpc(
@@ -129,7 +133,7 @@ export default function RoutinesPage() {
         routineIds.length
           ? await Promise.all([
               supabase.from("tasks").select("id, routine_id, title, sort_order").in("routine_id", routineIds).order("sort_order"),
-              supabase.from("routine_assignments").select("id, routine_id, child_id, days_of_week").in("routine_id", routineIds),
+              supabase.from("routine_assignments").select("id, routine_id, child_id, days_of_week").in("routine_id", routineIds).eq("is_active", true),
             ])
           : [{ data: [], error: null }, { data: [], error: null }];
 
@@ -294,7 +298,7 @@ export default function RoutinesPage() {
   const assignRoutine = async (routine: Routine, childId: string, assigned: boolean) => {
     const existingAssignmentId = routine.assignmentIds[childId];
     const result = assigned
-      ? await supabase.from("routine_assignments").insert({ routine_id: routine.id, child_id: childId, days_of_week: routine.daysOfWeek }).select("id").single()
+      ? await supabase.from("routine_assignments").insert({ routine_id: routine.id, child_id: childId, starts_on: getToday(), ends_on: null, days_of_week: routine.daysOfWeek }).select("id").single()
       : existingAssignmentId
         ? await supabase.from("routine_assignments").delete().eq("id", existingAssignmentId)
         : { data: null, error: null };
@@ -302,11 +306,58 @@ export default function RoutinesPage() {
       setError(result.error.message);
       return;
     }
-    const childIds = assigned ? [...routine.childIds, childId] : routine.childIds.filter((id) => id !== childId);
+    setRoutines((currentRoutines) => currentRoutines.map((item) => {
+      if (item.id !== routine.id) return item;
+
+      const childIds = assigned
+        ? item.childIds.includes(childId) ? item.childIds : [...item.childIds, childId]
+        : item.childIds.filter((id) => id !== childId);
+      const assignmentIds = { ...item.assignmentIds };
+      if (assigned && result.data) assignmentIds[childId] = result.data.id;
+      if (!assigned) delete assignmentIds[childId];
+      return { ...item, childIds, assignmentIds };
+    }));
+  };
+
+  const assignRoutineToAll = async (routine: Routine) => {
+    const missingChildIds = children
+      .map((child) => child.id)
+      .filter((childId) => !routine.childIds.includes(childId));
+    let data: Array<{ id: string; child_id: string }> = [];
+    if (missingChildIds.length > 0) {
+      const result = await supabase
+        .from("routine_assignments")
+        .insert(missingChildIds.map((childId) => ({
+          routine_id: routine.id,
+          child_id: childId,
+          days_of_week: routine.daysOfWeek,
+        })))
+        .select("id, child_id");
+
+      if (result.error) {
+        setError(result.error.message);
+        return;
+      }
+      data = result.data || [];
+    }
+
     const assignmentIds = { ...routine.assignmentIds };
-    if (assigned && result.data) assignmentIds[childId] = result.data.id;
-    if (!assigned) delete assignmentIds[childId];
-    setRoutines(routines.map((item) => item.id === routine.id ? { ...item, childIds, assignmentIds } : item));
+    (data || []).forEach((assignment) => {
+      assignmentIds[assignment.child_id] = assignment.id;
+    });
+
+    const { error: daysError } = await supabase
+      .from("routine_assignments")
+      .update({ starts_on: getToday(), ends_on: null, days_of_week: routine.daysOfWeek })
+      .in("id", Object.values(assignmentIds));
+    if (daysError) {
+      setError(daysError.message);
+      return;
+    }
+
+    setRoutines((currentRoutines) => currentRoutines.map((item) => item.id === routine.id
+      ? { ...item, childIds: [...new Set([...item.childIds, ...missingChildIds])], assignmentIds }
+      : item));
   };
 
   const updateRoutineDays = async (routine: Routine, day: number) => {
@@ -442,8 +493,9 @@ export default function RoutinesPage() {
               </div>
 
               <div className="mt-5 border-t border-slate-100 pt-4">
-                <fieldset>
+                <fieldset className="relative">
                   <legend className="text-sm font-semibold text-slate-700">Assigned children</legend>
+                    <button type="button" onClick={() => assignRoutineToAll(routine)} disabled={children.length === 0} className="absolute right-0 top-0 text-xs font-semibold text-blue-600 underline disabled:text-slate-400 disabled:no-underline">Apply to all</button>
                   <div className="mt-2 grid gap-2 sm:grid-cols-2">
                     {children.map((child) => {
                       const assigned = routine.childIds.includes(child.id);

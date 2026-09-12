@@ -1,6 +1,6 @@
 # Supabase Database Schema
 
-The migration in `supabase/migrations/20260911000000_initial_schema.sql` creates the first data model for Family Checklist.
+The migration in `supabase/migrations/20260911000000_initial_schema.sql` creates the first data model for Kusuma App.
 
 ## Access model
 

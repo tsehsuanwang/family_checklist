@@ -19,6 +19,7 @@ export default function SettingsPage() {
   const [familyId, setFamilyId] = useState<string | null>(null);
   const [children, setChildren] = useState<Child[]>([]);
   const [newChildName, setNewChildName] = useState("");
+  const [coParentEmail, setCoParentEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -40,10 +41,10 @@ export default function SettingsPage() {
       setFullName(name);
 
       // Get or create family
-      const { data: familiesData, error: familiesError } = await supabase
-        .from("families")
-        .select("id")
-        .eq("created_by", sessionData.session.user.id)
+      const { data: familyMember, error: familiesError } = await supabase
+        .from("family_members")
+        .select("family_id")
+        .eq("user_id", sessionData.session.user.id)
         .maybeSingle();
 
       if (familiesError) {
@@ -53,9 +54,9 @@ export default function SettingsPage() {
         return;
       }
 
-      let currentFamilyId = familiesData?.id;
+      let currentFamilyId = familyMember?.family_id;
 
-      if (!familiesData) {
+      if (!familyMember) {
         // Use a database function so family creation and its RLS boundary stay together.
         const { data: newFamilyId, error: createError } = await supabase.rpc(
           "create_family_for_current_user",
@@ -72,8 +73,6 @@ export default function SettingsPage() {
         }
 
         currentFamilyId = newFamilyId;
-      } else {
-        currentFamilyId = familiesData.id;
       }
 
       setFamilyId(currentFamilyId);
@@ -158,6 +157,24 @@ export default function SettingsPage() {
     }
   };
 
+  const handleAddCoParent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!coParentEmail.trim()) return;
+
+    setSubmitting(true);
+    setError("");
+    const { error: addError } = await supabase.rpc("add_family_member_by_email", {
+      member_email: coParentEmail.trim(),
+    });
+
+    if (addError) {
+      setError(addError.message);
+    } else {
+      setCoParentEmail("");
+    }
+    setSubmitting(false);
+  };
+
   const handleDeleteChild = async (childId: string) => {
     if (!confirm("Are you sure?")) return;
 
@@ -194,7 +211,7 @@ export default function SettingsPage() {
         <header className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-2.5">
             <span className="brand-mark" aria-hidden="true">✓</span>
-            <span className="text-sm font-bold tracking-wide text-slate-700">Family Checklist</span>
+            <span className="text-sm font-bold tracking-wide text-slate-700">Kusuma App</span>
           </div>
           <div className="flex gap-3">
             <button
@@ -246,6 +263,30 @@ export default function SettingsPage() {
                   {savingName ? "Saving..." : "Save"}
                 </button>
               </div>
+            </form>
+
+            <form onSubmit={handleAddCoParent}>
+              <label htmlFor="coParentEmail" className="block text-sm font-semibold mb-2 text-slate-700">
+                Add another parent
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="coParentEmail"
+                  type="email"
+                  value={coParentEmail}
+                  onChange={(e) => setCoParentEmail(e.target.value)}
+                  placeholder="parent@email.com"
+                  className="flex-1 px-4 py-2 border-2 border-slate-200 rounded-lg focus:outline-none focus:border-blue-600"
+                />
+                <button
+                  type="submit"
+                  disabled={submitting || !coParentEmail.trim() || !familyId}
+                  className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {submitting ? "Adding..." : "Add"}
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-slate-500">They must create their account first. Shared routines are assigned to child profiles.</p>
             </form>
           </div>
 

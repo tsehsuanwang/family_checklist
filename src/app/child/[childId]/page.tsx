@@ -96,7 +96,7 @@ export default function ChildChecklistPage() {
   const childId = params.childId;
   const [child, setChild] = useState<Child | null>(null);
   const [routines, setRoutines] = useState<Routine[]>([]);
-  const [mathResults] = useState<Record<string, boolean[]>>({});
+  const [mathResults, setMathResults] = useState<Record<string, boolean[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -149,17 +149,26 @@ export default function ChildChecklistPage() {
         return;
       }
 
-      const [{ data: routineData, error: routineError }, { data: taskData, error: taskError }, { data: completionData, error: completionError }] = await Promise.all([
+      const [{ data: routineData, error: routineError }, { data: taskData, error: taskError }, { data: completionData, error: completionError }, { data: mathCompletionData, error: mathCompletionError }] = await Promise.all([
         supabase.from("routines").select("id, name, description, routine_type, math_difficulty, math_operations, math_question_count").in("id", routineIds).eq("is_active", true),
         supabase.from("tasks").select("id, routine_id, title, sort_order").in("routine_id", routineIds).order("sort_order"),
         supabase.from("task_completions").select("assignment_id, task_id").eq("completion_date", today),
+        supabase.from("math_completions").select("assignment_id, question_index, is_correct").eq("completion_date", today),
       ]);
 
-      if (routineError || taskError || completionError) {
-        setError(routineError?.message || taskError?.message || completionError?.message || "Failed to load checklist");
+      if (routineError || taskError || completionError || mathCompletionError) {
+        setError(routineError?.message || taskError?.message || completionError?.message || mathCompletionError?.message || "Failed to load checklist");
         setLoading(false);
         return;
       }
+
+      const loadedMathResults: Record<string, boolean[]> = {};
+      (mathCompletionData || []).forEach((completion) => {
+        const results = loadedMathResults[completion.assignment_id] || [];
+        results[completion.question_index] = completion.is_correct;
+        loadedMathResults[completion.assignment_id] = results;
+      });
+      setMathResults(loadedMathResults);
 
       setRoutines(activeAssignments.flatMap((assignment) => {
         const routine = (routineData || []).find((item) => item.id === assignment.routine_id);

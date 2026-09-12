@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Family Checklist",
-    short_name: "Checklist",
+    name: "Kusuma App",
+    short_name: "Kusuma App",
     description: "Daily routines made simple for children and families.",
     start_url: "/",
     display: "standalone",

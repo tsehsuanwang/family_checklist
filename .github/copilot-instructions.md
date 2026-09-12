@@ -1,4 +1,4 @@
-# Family Checklist Project Instructions
+# Kusuma App Project Instructions
 
 This project is a family checklist application.
 
