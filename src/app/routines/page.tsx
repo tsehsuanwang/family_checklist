@@ -202,6 +202,20 @@ export default function RoutinesPage() {
     setRoutines(routines.map((item) => item.id === routine.id ? { ...item, [field]: nextValue } : item));
   };
 
+  const updateMathDifficulty = async (routine: Routine, difficulty: Routine["math_difficulty"]) => {
+    const { error: updateError } = await supabase
+      .from("routines")
+      .update({ math_difficulty: difficulty })
+      .eq("id", routine.id);
+
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    setRoutines(routines.map((item) => item.id === routine.id ? { ...item, math_difficulty: difficulty } : item));
+  };
+
   const deleteRoutine = async (routineId: string) => {
     if (!window.confirm("Delete this routine and its tasks?")) return;
     const { error: deleteError } = await supabase.from("routines").delete().eq("id", routineId);
@@ -371,6 +385,12 @@ export default function RoutinesPage() {
               </div>
 
               <div className="mt-5 border-t border-slate-100 pt-4">
+                {routine.routine_type === "math" && <label className="mb-4 flex items-center justify-between gap-3 text-sm font-semibold text-slate-700">
+                  Grade level
+                  <select value={routine.math_difficulty} onChange={(event) => updateMathDifficulty(routine, event.target.value as Routine["math_difficulty"])} className="rounded-md border border-slate-200 px-3 py-2 font-normal focus:border-blue-600 focus:outline-none">
+                    {mathGrades.map((grade) => <option key={grade.value} value={grade.value}>{grade.label}</option>)}
+                  </select>
+                </label>}
                 <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-bold uppercase tracking-wide text-slate-600">Checklist steps</h3><span className="text-xs text-slate-400">{routine.tasks.length} steps</span></div>
                 <div className="space-y-2">
                   {routine.tasks.map((task) => <div key={task.id} className="flex items-center gap-2"><input defaultValue={task.title} onBlur={(event) => updateTask(routine.id, task.id, event.target.value)} className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none" aria-label="Task title" /><button type="button" onClick={() => deleteTask(routine.id, task.id)} className="px-2 text-xs font-semibold text-red-600">Remove</button></div>)}
