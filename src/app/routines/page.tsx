@@ -22,7 +22,20 @@ interface Routine {
   description: string | null;
   tasks: Task[];
   childId: string;
+  daysOfWeek: number[];
 }
+
+const weekdays = [
+  { value: 1, label: "M", name: "Mon" },
+  { value: 2, label: "T", name: "Tue" },
+  { value: 3, label: "W", name: "Wed" },
+  { value: 4, label: "T", name: "Thu" },
+  { value: 5, label: "F", name: "Fri" },
+  { value: 6, label: "S", name: "Sat" },
+  { value: 0, label: "S", name: "Sun" },
+];
+
+const allDays = weekdays.map((day) => day.value);
 
 export default function RoutinesPage() {
   const router = useRouter();
@@ -92,7 +105,7 @@ export default function RoutinesPage() {
         routineIds.length
           ? await Promise.all([
               supabase.from("tasks").select("id, routine_id, title, sort_order").in("routine_id", routineIds).order("sort_order"),
-              supabase.from("routine_assignments").select("routine_id, child_id").in("routine_id", routineIds),
+              supabase.from("routine_assignments").select("routine_id, child_id, days_of_week").in("routine_id", routineIds),
             ])
           : [{ data: [], error: null }, { data: [], error: null }];
 
@@ -106,6 +119,7 @@ export default function RoutinesPage() {
           ...routine,
           tasks: (taskData || []).filter((task) => task.routine_id === routine.id),
           childId: (assignmentData || []).find((assignment) => assignment.routine_id === routine.id)?.child_id || "",
+          daysOfWeek: (assignmentData || []).find((assignment) => assignment.routine_id === routine.id)?.days_of_week || allDays,
         })),
       );
       setLoading(false);
@@ -134,7 +148,7 @@ export default function RoutinesPage() {
     if (insertError) {
       setError(insertError.message);
     } else if (data) {
-      setRoutines([...routines, { ...data, tasks: [], childId: "" }]);
+      setRoutines([...routines, { ...data, tasks: [], childId: "", daysOfWeek: allDays }]);
       setNewRoutineName("");
       setNewRoutineDescription("");
     }
@@ -214,13 +228,44 @@ export default function RoutinesPage() {
       .eq("routine_id", routine.id)
       .maybeSingle();
     const result = existing
-      ? await supabase.from("routine_assignments").update({ child_id: childId }).eq("id", existing.id)
-      : await supabase.from("routine_assignments").insert({ routine_id: routine.id, child_id: childId });
+      ? await supabase.from("routine_assignments").update({ child_id: childId, days_of_week: routine.daysOfWeek }).eq("id", existing.id)
+      : await supabase.from("routine_assignments").insert({ routine_id: routine.id, child_id: childId, days_of_week: routine.daysOfWeek });
     if (result.error) {
       setError(result.error.message);
       return;
     }
     setRoutines(routines.map((item) => item.id === routine.id ? { ...item, childId } : item));
+  };
+
+  const updateRoutineDays = async (routine: Routine, day: number) => {
+    const daysOfWeek = routine.daysOfWeek.includes(day)
+      ? routine.daysOfWeek.filter((value) => value !== day)
+      : [...routine.daysOfWeek, day].sort((left, right) => left - right);
+
+    if (daysOfWeek.length === 0) return;
+
+    const { data: existing } = await supabase
+      .from("routine_assignments")
+      .select("id")
+      .eq("routine_id", routine.id)
+      .maybeSingle();
+
+    if (!existing) {
+      setError("Choose a child before setting active days.");
+      return;
+    }
+
+    const { error: updateError } = await supabase
+      .from("routine_assignments")
+      .update({ days_of_week: daysOfWeek })
+      .eq("id", existing.id);
+
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    setRoutines(routines.map((item) => item.id === routine.id ? { ...item, daysOfWeek } : item));
   };
 
   const logout = async () => {
@@ -282,7 +327,36 @@ export default function RoutinesPage() {
                 <form onSubmit={(event) => addTask(routine, event)} className="mt-3 flex gap-2"><input value={newTaskNames[routine.id] || ""} onChange={(event) => setNewTaskNames({ ...newTaskNames, [routine.id]: event.target.value })} placeholder="Add a checklist step" className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none" /><button type="submit" className="rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white">Add step</button></form>
               </div>
 
-              <div className="mt-5 border-t border-slate-100 pt-4"><label className="flex items-center justify-between gap-3 text-sm font-semibold text-slate-700">Assigned child<select value={routine.childId} onChange={(event) => assignRoutine(routine, event.target.value)} className="rounded-md border border-slate-200 px-3 py-2 font-normal focus:border-blue-600 focus:outline-none"><option value="">Choose a child</option>{children.map((child) => <option key={child.id} value={child.id}>{child.display_name}</option>)}</select></label></div>
+              <div className="mt-5 border-t border-slate-100 pt-4">
+                <label className="flex items-center justify-between gap-3 text-sm font-semibold text-slate-700">
+                  Assigned child
+                  <select value={routine.childId} onChange={(event) => assignRoutine(routine, event.target.value)} className="rounded-md border border-slate-200 px-3 py-2 font-normal focus:border-blue-600 focus:outline-none">
+                    <option value="">Choose a child</option>
+                    {children.map((child) => <option key={child.id} value={child.id}>{child.display_name}</option>)}
+                  </select>
+                </label>
+                <div className="mt-4">
+                  <p className="text-sm font-semibold text-slate-700">Active days</p>
+                  <div className="mt-2 grid grid-cols-7 gap-1.5">
+                    {weekdays.map((day) => {
+                      const active = routine.daysOfWeek.includes(day.value);
+                      return <button
+                        key={day.name}
+                        type="button"
+                        title={day.name}
+                        aria-label={`${day.name} ${active ? "active" : "inactive"}`}
+                        aria-pressed={active}
+                        disabled={!routine.childId}
+                        onClick={() => updateRoutineDays(routine, day.value)}
+                        className={`aspect-square rounded-lg border-2 text-sm font-bold transition ${active ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-400"} disabled:cursor-not-allowed disabled:opacity-40`}
+                      >
+                        {day.label}
+                      </button>;
+                    })}
+                  </div>
+                  <p className="mt-2 text-xs text-slate-400">Choose the days this routine should appear.</p>
+                </div>
+              </div>
             </article>
           ))}
         </div>
