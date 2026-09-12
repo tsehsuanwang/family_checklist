@@ -61,16 +61,28 @@ export default function RoutineDetailPage() {
       ]);
       if (assignmentError || !assignment) { setError(assignmentError?.message || "Routine assignment not found"); setLoading(false); return; }
       setChildName(child?.display_name || "");
-      const [{ data: routineData, error: routineError }, { data: taskData, error: taskError }, { data: completionData, error: completionError }] = await Promise.all([
+      const [{ data: routineData, error: routineError }, { data: taskData, error: taskError }, { data: completionData, error: completionError }, { data: mathCompletionData, error: mathCompletionError }] = await Promise.all([
         supabase.from("routines").select("id, name, description, routine_type, math_difficulty, math_operations, math_question_count").eq("id", assignment.routine_id).single(),
         supabase.from("tasks").select("id, title, sort_order").eq("routine_id", assignment.routine_id).order("sort_order"),
         supabase.from("task_completions").select("task_id").eq("assignment_id", assignmentId).eq("completion_date", today()),
+        supabase.from("math_completions").select("question_index, submitted_answer, is_correct").eq("assignment_id", assignmentId).eq("completion_date", today()).order("question_index"),
       ]);
-      if (routineError || taskError || completionError || !routineData) { setError(routineError?.message || taskError?.message || completionError?.message || "Failed to load routine"); setLoading(false); return; }
+      if (routineError || taskError || completionError || mathCompletionError || !routineData) { setError(routineError?.message || taskError?.message || completionError?.message || mathCompletionError?.message || "Failed to load routine"); setLoading(false); return; }
       setRoutine(routineData);
       setTasks(taskData || []);
       setCompletedTaskIds((completionData || []).map((item) => item.task_id));
-      if (routineData.routine_type === "math") setQuestions(makeQuestions(routineData.id, today(), routineData.math_difficulty, routineData.math_operations, routineData.math_question_count));
+      if (routineData.routine_type === "math") {
+        const generatedQuestions = makeQuestions(routineData.id, today(), routineData.math_difficulty, routineData.math_operations, routineData.math_question_count);
+        setQuestions(generatedQuestions);
+        const savedAnswers = Array(generatedQuestions.length).fill("");
+        const savedResults = Array(generatedQuestions.length).fill(false);
+        (mathCompletionData || []).forEach((item) => {
+          savedAnswers[item.question_index] = item.submitted_answer === null ? "" : String(item.submitted_answer);
+          savedResults[item.question_index] = item.is_correct;
+        });
+        setAnswers(savedAnswers);
+        setResults((mathCompletionData || []).length ? savedResults : null);
+      }
       setLoading(false);
     };
     load();
@@ -85,7 +97,24 @@ export default function RoutineDetailPage() {
     setCompletedTaskIds(completed ? completedTaskIds.filter((id) => id !== taskId) : [...completedTaskIds, taskId]);
   };
 
-  const checkAnswers = () => setResults(questions.map((question, index) => Number(answers[index]) === question.answer));
+  const checkAnswers = async () => {
+    const nextResults = questions.map((question, index) => Number(answers[index]) === question.answer);
+    const { error: saveError } = await supabase.from("math_completions").upsert(
+      questions.map((question, index) => ({
+        assignment_id: assignmentId,
+        question_index: index,
+        completion_date: today(),
+        submitted_answer: answers[index] === "" ? null : Number(answers[index]),
+        is_correct: nextResults[index],
+      })),
+      { onConflict: "assignment_id,question_index,completion_date" },
+    );
+    if (saveError) {
+      setError(saveError.message);
+      return;
+    }
+    setResults(nextResults);
+  };
 
   if (loading) return <main className="flex min-h-screen items-center justify-center"><p>Loading...</p></main>;
   const score = results?.filter(Boolean).length || 0;
