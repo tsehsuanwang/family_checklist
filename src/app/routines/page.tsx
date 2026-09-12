@@ -31,13 +31,13 @@ interface Routine {
 }
 
 const weekdays = [
-  { value: 1, label: "M", name: "Mon" },
-  { value: 2, label: "T", name: "Tue" },
-  { value: 3, label: "W", name: "Wed" },
-  { value: 4, label: "T", name: "Thu" },
-  { value: 5, label: "F", name: "Fri" },
-  { value: 6, label: "S", name: "Sat" },
-  { value: 0, label: "S", name: "Sun" },
+  { value: 1, label: "Mo", name: "Mon" },
+  { value: 2, label: "Tu", name: "Tue" },
+  { value: 3, label: "We", name: "Wed" },
+  { value: 4, label: "Th", name: "Thu" },
+  { value: 5, label: "Fr", name: "Fri" },
+  { value: 6, label: "Sa", name: "Sat" },
+  { value: 0, label: "Su", name: "Sun" },
 ];
 
 const allDays = weekdays.map((day) => day.value);
@@ -216,6 +216,30 @@ export default function RoutinesPage() {
     setRoutines(routines.map((item) => item.id === routine.id ? { ...item, math_difficulty: difficulty } : item));
   };
 
+  const updateMathSettings = async (routine: Routine, changes: Partial<Pick<Routine, "math_operations" | "math_question_count">>) => {
+    const { error: updateError } = await supabase
+      .from("routines")
+      .update(changes)
+      .eq("id", routine.id);
+
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    setRoutines(routines.map((item) => item.id === routine.id ? { ...item, ...changes } : item));
+  };
+
+  const toggleMathOperation = (routine: Routine, operation: string) => {
+    const selected = routine.math_operations.includes(operation);
+    const mathOperationsForRoutine = selected
+      ? routine.math_operations.filter((item) => item !== operation)
+      : [...routine.math_operations, operation];
+
+    if (mathOperationsForRoutine.length === 0) return;
+    updateMathSettings(routine, { math_operations: mathOperationsForRoutine });
+  };
+
   const deleteRoutine = async (routineId: string) => {
     if (!window.confirm("Delete this routine and its tasks?")) return;
     const { error: deleteError } = await supabase.from("routines").delete().eq("id", routineId);
@@ -391,6 +415,20 @@ export default function RoutinesPage() {
                     {mathGrades.map((grade) => <option key={grade.value} value={grade.value}>{grade.label}</option>)}
                   </select>
                 </label>}
+                {routine.routine_type === "math" && <div className="mb-4 grid gap-4 sm:grid-cols-2">
+                  <label className="text-sm font-semibold text-slate-700">Number of questions
+                    <input type="number" min="1" max="20" value={routine.math_question_count} onChange={(event) => updateMathSettings(routine, { math_question_count: Math.min(20, Math.max(1, Number(event.target.value))) })} className="mt-1 block w-full rounded-md border border-slate-200 px-3 py-2 font-normal focus:border-blue-600 focus:outline-none" />
+                  </label>
+                  <fieldset>
+                    <legend className="text-sm font-semibold text-slate-700">Operations</legend>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {mathOperations.map((operation) => {
+                        const active = routine.math_operations.includes(operation.value);
+                        return <button key={operation.value} type="button" onClick={() => toggleMathOperation(routine, operation.value)} className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${active ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300 text-slate-600"}`}>{operation.label}</button>;
+                      })}
+                    </div>
+                  </fieldset>
+                </div>}
                 {routine.routine_type === "checklist" && <>
                   <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-bold uppercase tracking-wide text-slate-600">Checklist steps</h3><span className="text-xs text-slate-400">{routine.tasks.length} steps</span></div>
                   <div className="space-y-2">
@@ -426,7 +464,7 @@ export default function RoutinesPage() {
                         aria-pressed={active}
                         disabled={routine.childIds.length === 0}
                         onClick={() => updateRoutineDays(routine, day.value)}
-                        className={`aspect-square rounded-lg border-2 text-sm font-bold transition ${active ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-400"} disabled:cursor-not-allowed disabled:opacity-40`}
+                        className={`h-9 w-9 rounded-full border text-xs font-bold transition ${active ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-400"} disabled:cursor-not-allowed disabled:opacity-40`}
                       >
                         {day.label}
                       </button>;
