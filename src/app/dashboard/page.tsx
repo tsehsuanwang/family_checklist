@@ -101,6 +101,7 @@ export default function DashboardPage() {
 
   const handleSelectChild = (childId: string) => {
     setSelectedChildId(childId);
+    router.push(`/child/${childId}`);
   };
 
   return (
