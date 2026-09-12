@@ -96,9 +96,7 @@ export default function ChildChecklistPage() {
   const childId = params.childId;
   const [child, setChild] = useState<Child | null>(null);
   const [routines, setRoutines] = useState<Routine[]>([]);
-  const [mathAnswers, setMathAnswers] = useState<Record<string, string[]>>({});
-  const [mathResults, setMathResults] = useState<Record<string, boolean[]>>({});
-  const [selectedRoutineId, setSelectedRoutineId] = useState<string | null>(null);
+  const [mathResults] = useState<Record<string, boolean[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -184,29 +182,6 @@ export default function ChildChecklistPage() {
     loadChecklist();
   }, [childId, router]);
 
-  const toggleTask = async (routine: Routine, taskId: string) => {
-    const completed = routine.completedTaskIds.includes(taskId);
-    const today = getToday();
-    const result = completed
-      ? await supabase.from("task_completions").delete().eq("assignment_id", routine.assignmentId).eq("task_id", taskId).eq("completion_date", today)
-      : await supabase.from("task_completions").insert({ assignment_id: routine.assignmentId, task_id: taskId, completion_date: today });
-
-    if (result.error) {
-      setError(result.error.message);
-      return;
-    }
-
-    setRoutines(routines.map((item) => {
-      if (item.assignmentId !== routine.assignmentId) return item;
-      return {
-        ...item,
-        completedTaskIds: completed
-          ? item.completedTaskIds.filter((id) => id !== taskId)
-          : [...item.completedTaskIds, taskId],
-      };
-    }));
-  };
-
   if (loading) {
     return <main className="flex min-h-screen items-center justify-center text-slate-900"><p>Loading...</p></main>;
   }
@@ -214,8 +189,6 @@ export default function ChildChecklistPage() {
   const totalTasks = routines.reduce((total, routine) => total + (routine.routine_type === "math" ? routine.mathQuestions.length : routine.tasks.length), 0);
   const completedTasks = routines.reduce((total, routine) => total + (routine.routine_type === "math" ? (mathResults[routine.assignmentId] || []).filter(Boolean).length : routine.completedTaskIds.length), 0);
   const overallProgress = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
-  const selectedRoutine = routines.find((routine) => routine.assignmentId === selectedRoutineId);
 
   const getMathProgress = (routine: Routine) => {
     const results = mathResults[routine.assignmentId] || [];
@@ -225,12 +198,6 @@ export default function ChildChecklistPage() {
   const getRoutineProgress = (routine: Routine) => routine.routine_type === "math"
     ? getMathProgress(routine)
     : routine.tasks.length ? Math.round((routine.completedTaskIds.length / routine.tasks.length) * 100) : 0;
-
-  const checkMathAnswers = (routine: Routine) => {
-    const answers = mathAnswers[routine.assignmentId] || [];
-    const results = routine.mathQuestions.map((question, index) => Number(answers[index]) === question.answer);
-    setMathResults({ ...mathResults, [routine.assignmentId]: results });
-  };
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#eff6ff,transparent_48%)] px-5 py-6 text-slate-900 sm:px-8">
@@ -261,13 +228,11 @@ export default function ChildChecklistPage() {
                 const progress = getRoutineProgress(routine);
                 const itemCount = routine.routine_type === "math" ? routine.mathQuestions.length : routine.tasks.length;
                 const isComplete = progress === 100 && itemCount > 0;
-                const isSelected = selectedRoutineId === routine.assignmentId;
                 return <button
                   key={routine.assignmentId}
                   type="button"
-                  onClick={() => setSelectedRoutineId(isSelected ? null : routine.assignmentId)}
-                  aria-expanded={isSelected}
-                  className={`rounded-2xl border-2 p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${isSelected ? "border-blue-600 bg-blue-50" : isComplete ? "border-emerald-200 bg-emerald-50" : "border-white bg-white"}`}
+                  onClick={() => router.push(`/child/${childId}/routine/${routine.assignmentId}`)}
+                  className={`rounded-2xl border-2 p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${isComplete ? "border-emerald-200 bg-emerald-50" : "border-white bg-white"}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <span className="text-xl font-black text-slate-950">{routine.name}</span>
@@ -283,41 +248,6 @@ export default function ChildChecklistPage() {
               })}
             </div>
 
-            {selectedRoutine && <article className="mt-6 rounded-2xl border-2 border-blue-200 bg-white p-5 shadow-md sm:p-7">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Routine checklist</p>
-                  <h2 className="mt-1 text-3xl font-black text-slate-950">{selectedRoutine.name}</h2>
-                </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-bold ${getRoutineProgress(selectedRoutine) === 100 ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>{getRoutineProgress(selectedRoutine) === 100 ? "Complete" : `${getRoutineProgress(selectedRoutine)}% done`}</span>
-              </div>
-              {selectedRoutine.description && <p className="mt-2 text-sm text-slate-500">{selectedRoutine.description}</p>}
-              {selectedRoutine.routine_type === "math" ? <div className="mt-6">
-                <p className="mb-4 text-sm text-slate-600">Answer every question correctly to complete this routine.</p>
-                <div className="space-y-3">{selectedRoutine.mathQuestions.map((question, index) => {
-                  const result = mathResults[selectedRoutine.assignmentId]?.[index];
-                  return <label key={question.id} className={`flex items-center gap-3 rounded-xl border-2 p-4 ${result === true ? "border-emerald-200 bg-emerald-50" : result === false ? "border-red-200 bg-red-50" : "border-slate-200"}`}>
-                    <span className="min-w-24 font-bold text-slate-900">{question.prompt} =</span>
-                    <input inputMode="numeric" value={mathAnswers[selectedRoutine.assignmentId]?.[index] || ""} onChange={(event) => {
-                      const answers = [...(mathAnswers[selectedRoutine.assignmentId] || [])];
-                      answers[index] = event.target.value;
-                      setMathAnswers({ ...mathAnswers, [selectedRoutine.assignmentId]: answers });
-                    }} className="w-24 rounded-lg border-2 border-slate-200 px-3 py-2 text-lg font-bold focus:border-blue-600 focus:outline-none" aria-label={`Answer for ${question.prompt}`} />
-                    {result === true && <span className="ml-auto font-black text-emerald-600">✓</span>}
-                    {result === false && <span className="ml-auto text-sm font-bold text-red-600">Try again</span>}
-                  </label>;
-                })}</div>
-                <button type="button" onClick={() => checkMathAnswers(selectedRoutine)} className="mt-5 rounded-lg bg-blue-600 px-5 py-3 font-bold text-white hover:bg-blue-700">Check answers</button>
-                {mathResults[selectedRoutine.assignmentId] && <p className="mt-3 font-semibold text-slate-700">{mathResults[selectedRoutine.assignmentId].filter(Boolean).length} of {selectedRoutine.mathQuestions.length} correct</p>}
-              </div> : <div className="mt-6 space-y-3">{selectedRoutine.tasks.map((task) => {
-                const isComplete = selectedRoutine.completedTaskIds.includes(task.id);
-                return <label key={task.id} className={`flex cursor-pointer items-center gap-3 rounded-xl border-2 p-4 transition ${isComplete ? "border-emerald-200 bg-emerald-50" : "border-slate-200 hover:border-blue-300"}`}>
-                  <input type="checkbox" checked={isComplete} onChange={() => toggleTask(selectedRoutine, task.id)} className="h-6 w-6 accent-blue-600" />
-                  <span className={isComplete ? "font-medium text-slate-500 line-through" : "font-semibold text-slate-900"}>{task.title}</span>
-                  {isComplete && <span className="ml-auto text-lg font-black text-emerald-600">✓</span>}
-                </label>;
-              })}</div>}
-            </article>}
           </>
         )}
       </div>

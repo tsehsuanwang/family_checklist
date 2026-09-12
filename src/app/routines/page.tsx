@@ -25,7 +25,8 @@ interface Routine {
   math_operations: string[];
   math_question_count: number;
   tasks: Task[];
-  childId: string;
+  childIds: string[];
+  assignmentIds: Record<string, string>;
   daysOfWeek: number[];
 }
 
@@ -128,7 +129,7 @@ export default function RoutinesPage() {
         routineIds.length
           ? await Promise.all([
               supabase.from("tasks").select("id, routine_id, title, sort_order").in("routine_id", routineIds).order("sort_order"),
-              supabase.from("routine_assignments").select("routine_id, child_id, days_of_week").in("routine_id", routineIds),
+              supabase.from("routine_assignments").select("id, routine_id, child_id, days_of_week").in("routine_id", routineIds),
             ])
           : [{ data: [], error: null }, { data: [], error: null }];
 
@@ -141,7 +142,8 @@ export default function RoutinesPage() {
         loadedRoutines.map((routine) => ({
           ...routine,
           tasks: (taskData || []).filter((task) => task.routine_id === routine.id),
-          childId: (assignmentData || []).find((assignment) => assignment.routine_id === routine.id)?.child_id || "",
+          childIds: (assignmentData || []).filter((assignment) => assignment.routine_id === routine.id).map((assignment) => assignment.child_id),
+          assignmentIds: Object.fromEntries((assignmentData || []).filter((assignment) => assignment.routine_id === routine.id).map((assignment) => [assignment.child_id, assignment.id])),
           daysOfWeek: (assignmentData || []).find((assignment) => assignment.routine_id === routine.id)?.days_of_week || allDays,
         })),
       );
@@ -175,7 +177,7 @@ export default function RoutinesPage() {
     if (insertError) {
       setError(insertError.message);
     } else if (data) {
-      setRoutines([...routines, { ...data, tasks: [], childId: "", daysOfWeek: allDays }]);
+      setRoutines([...routines, { ...data, tasks: [], childIds: [], assignmentIds: {}, daysOfWeek: allDays }]);
       setNewRoutineName("");
       setNewRoutineDescription("");
       setNewRoutineType("checklist");
@@ -251,21 +253,22 @@ export default function RoutinesPage() {
       : routine));
   };
 
-  const assignRoutine = async (routine: Routine, childId: string) => {
-    if (!childId) return;
-    const { data: existing } = await supabase
-      .from("routine_assignments")
-      .select("id")
-      .eq("routine_id", routine.id)
-      .maybeSingle();
-    const result = existing
-      ? await supabase.from("routine_assignments").update({ child_id: childId, days_of_week: routine.daysOfWeek }).eq("id", existing.id)
-      : await supabase.from("routine_assignments").insert({ routine_id: routine.id, child_id: childId, days_of_week: routine.daysOfWeek });
+  const assignRoutine = async (routine: Routine, childId: string, assigned: boolean) => {
+    const existingAssignmentId = routine.assignmentIds[childId];
+    const result = assigned
+      ? await supabase.from("routine_assignments").insert({ routine_id: routine.id, child_id: childId, days_of_week: routine.daysOfWeek }).select("id").single()
+      : existingAssignmentId
+        ? await supabase.from("routine_assignments").delete().eq("id", existingAssignmentId)
+        : { data: null, error: null };
     if (result.error) {
       setError(result.error.message);
       return;
     }
-    setRoutines(routines.map((item) => item.id === routine.id ? { ...item, childId } : item));
+    const childIds = assigned ? [...routine.childIds, childId] : routine.childIds.filter((id) => id !== childId);
+    const assignmentIds = { ...routine.assignmentIds };
+    if (assigned && result.data) assignmentIds[childId] = result.data.id;
+    if (!assigned) delete assignmentIds[childId];
+    setRoutines(routines.map((item) => item.id === routine.id ? { ...item, childIds, assignmentIds } : item));
   };
 
   const updateRoutineDays = async (routine: Routine, day: number) => {
@@ -275,21 +278,15 @@ export default function RoutinesPage() {
 
     if (daysOfWeek.length === 0) return;
 
-    const { data: existing } = await supabase
-      .from("routine_assignments")
-      .select("id")
-      .eq("routine_id", routine.id)
-      .maybeSingle();
-
-    if (!existing) {
-      setError("Choose a child before setting active days.");
+    if (routine.childIds.length === 0) {
+      setError("Choose at least one child before setting active days.");
       return;
     }
 
     const { error: updateError } = await supabase
       .from("routine_assignments")
       .update({ days_of_week: daysOfWeek })
-      .eq("id", existing.id);
+      .in("id", Object.values(routine.assignmentIds));
 
     if (updateError) {
       setError(updateError.message);
@@ -314,7 +311,7 @@ export default function RoutinesPage() {
         <header className="mb-10 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <span className="brand-mark" aria-hidden="true">✓</span>
-            <span className="text-sm font-bold tracking-wide text-slate-700">Family Checklist</span>
+            <span className="text-sm font-bold tracking-wide text-slate-700">Kusuma App</span>
           </div>
           <div className="flex gap-3">
             <button onClick={() => router.push("/dashboard")} className="text-xs font-semibold text-slate-600 underline">Dashboard</button>
@@ -382,13 +379,18 @@ export default function RoutinesPage() {
               </div>
 
               <div className="mt-5 border-t border-slate-100 pt-4">
-                <label className="flex items-center justify-between gap-3 text-sm font-semibold text-slate-700">
-                  Assigned child
-                  <select value={routine.childId} onChange={(event) => assignRoutine(routine, event.target.value)} className="rounded-md border border-slate-200 px-3 py-2 font-normal focus:border-blue-600 focus:outline-none">
-                    <option value="">Choose a child</option>
-                    {children.map((child) => <option key={child.id} value={child.id}>{child.display_name}</option>)}
-                  </select>
-                </label>
+                <fieldset>
+                  <legend className="text-sm font-semibold text-slate-700">Assigned children</legend>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    {children.map((child) => {
+                      const assigned = routine.childIds.includes(child.id);
+                      return <label key={child.id} className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm ${assigned ? "border-blue-300 bg-blue-50" : "border-slate-200"}`}>
+                        <input type="checkbox" checked={assigned} onChange={(event) => assignRoutine(routine, child.id, event.target.checked)} className="h-4 w-4 accent-blue-600" />
+                        <span>{child.display_name}</span>
+                      </label>;
+                    })}
+                  </div>
+                </fieldset>
                 <div className="mt-4">
                   <p className="text-sm font-semibold text-slate-700">Active days</p>
                   <div className="mt-2 grid grid-cols-7 gap-1.5">
@@ -400,7 +402,7 @@ export default function RoutinesPage() {
                         title={day.name}
                         aria-label={`${day.name} ${active ? "active" : "inactive"}`}
                         aria-pressed={active}
-                        disabled={!routine.childId}
+                        disabled={routine.childIds.length === 0}
                         onClick={() => updateRoutineDays(routine, day.value)}
                         className={`aspect-square rounded-lg border-2 text-sm font-bold transition ${active ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-400"} disabled:cursor-not-allowed disabled:opacity-40`}
                       >
