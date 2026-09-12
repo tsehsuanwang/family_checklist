@@ -19,9 +19,20 @@ interface Routine {
   id: string;
   name: string;
   description: string | null;
+  routine_type: "checklist" | "math";
+  math_difficulty: "grade_1" | "grade_2" | "grade_3" | "grade_4" | "grade_5" | "grade_6";
+  math_operations: string[];
+  math_question_count: number;
   tasks: Task[];
+  mathQuestions: MathQuestion[];
   assignmentId: string;
   completedTaskIds: string[];
+}
+
+interface MathQuestion {
+  id: string;
+  prompt: string;
+  answer: number;
 }
 
 const getToday = () => {
@@ -31,12 +42,62 @@ const getToday = () => {
   return `${date.getFullYear()}-${month}-${day}`;
 };
 
+const createMathQuestions = (routineId: string, date: string, difficulty: Routine["math_difficulty"], operations: string[], count: number): MathQuestion[] => {
+  let seed = Array.from(`${routineId}-${date}`).reduce((total, character) => total + character.charCodeAt(0), 0);
+  const next = (max: number) => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return Math.floor((seed / 233280) * max) + 1;
+  };
+  const limits = {
+    grade_1: 10,
+    grade_2: 20,
+    grade_3: 50,
+    grade_4: 100,
+    grade_5: 500,
+    grade_6: 1000,
+  };
+  const multiplicationLimits = {
+    grade_1: 5,
+    grade_2: 10,
+    grade_3: 10,
+    grade_4: 12,
+    grade_5: 15,
+    grade_6: 20,
+  };
+  const limit = limits[difficulty];
+  const multiplicationLimit = multiplicationLimits[difficulty];
+
+  return Array.from({ length: count }, (_, index) => {
+    const operation = operations[index % operations.length];
+    if (operation === "multiplication") {
+      const left = next(multiplicationLimit);
+      const right = next(multiplicationLimit);
+      return { id: `${routineId}-${index}`, prompt: `${left} x ${right}`, answer: left * right };
+    }
+    if (operation === "division") {
+      const divisor = next(multiplicationLimit);
+      const answer = next(multiplicationLimit);
+      return { id: `${routineId}-${index}`, prompt: `${divisor * answer} ÷ ${divisor}`, answer };
+    }
+    const left = next(limit);
+    const right = next(limit);
+    if (operation === "subtraction") {
+      const larger = Math.max(left, right);
+      const smaller = Math.min(left, right);
+      return { id: `${routineId}-${index}`, prompt: `${larger} - ${smaller}`, answer: larger - smaller };
+    }
+    return { id: `${routineId}-${index}`, prompt: `${left} + ${right}`, answer: left + right };
+  });
+};
+
 export default function ChildChecklistPage() {
   const params = useParams<{ childId: string }>();
   const router = useRouter();
   const childId = params.childId;
   const [child, setChild] = useState<Child | null>(null);
   const [routines, setRoutines] = useState<Routine[]>([]);
+  const [mathAnswers, setMathAnswers] = useState<Record<string, string[]>>({});
+  const [mathResults, setMathResults] = useState<Record<string, boolean[]>>({});
   const [selectedRoutineId, setSelectedRoutineId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -91,7 +152,7 @@ export default function ChildChecklistPage() {
       }
 
       const [{ data: routineData, error: routineError }, { data: taskData, error: taskError }, { data: completionData, error: completionError }] = await Promise.all([
-        supabase.from("routines").select("id, name, description").in("id", routineIds).eq("is_active", true),
+        supabase.from("routines").select("id, name, description, routine_type, math_difficulty, math_operations, math_question_count").in("id", routineIds).eq("is_active", true),
         supabase.from("tasks").select("id, routine_id, title, sort_order").in("routine_id", routineIds).order("sort_order"),
         supabase.from("task_completions").select("assignment_id, task_id").eq("completion_date", today),
       ]);
@@ -108,6 +169,9 @@ export default function ChildChecklistPage() {
         return [{
           ...routine,
           tasks: (taskData || []).filter((task) => task.routine_id === routine.id),
+          mathQuestions: routine.routine_type === "math"
+            ? createMathQuestions(routine.id, today, routine.math_difficulty, routine.math_operations, routine.math_question_count)
+            : [],
           assignmentId: assignment.id,
           completedTaskIds: (completionData || [])
             .filter((completion) => completion.assignment_id === assignment.id)
@@ -147,17 +211,26 @@ export default function ChildChecklistPage() {
     return <main className="flex min-h-screen items-center justify-center text-slate-900"><p>Loading...</p></main>;
   }
 
-  const totalTasks = routines.reduce((total, routine) => total + routine.tasks.length, 0);
-  const completedTasks = routines.reduce((total, routine) => total + routine.completedTaskIds.length, 0);
+  const totalTasks = routines.reduce((total, routine) => total + (routine.routine_type === "math" ? routine.mathQuestions.length : routine.tasks.length), 0);
+  const completedTasks = routines.reduce((total, routine) => total + (routine.routine_type === "math" ? (mathResults[routine.assignmentId] || []).filter(Boolean).length : routine.completedTaskIds.length), 0);
   const overallProgress = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-  const getRoutineProgress = (routine: Routine) => {
-    const total = routine.tasks.length;
-    const completed = routine.completedTaskIds.length;
-    return total ? Math.round((completed / total) * 100) : 0;
+  const selectedRoutine = routines.find((routine) => routine.assignmentId === selectedRoutineId);
+
+  const getMathProgress = (routine: Routine) => {
+    const results = mathResults[routine.assignmentId] || [];
+    return routine.mathQuestions.length ? Math.round((results.filter(Boolean).length / routine.mathQuestions.length) * 100) : 0;
   };
 
-  const selectedRoutine = routines.find((routine) => routine.assignmentId === selectedRoutineId);
+  const getRoutineProgress = (routine: Routine) => routine.routine_type === "math"
+    ? getMathProgress(routine)
+    : routine.tasks.length ? Math.round((routine.completedTaskIds.length / routine.tasks.length) * 100) : 0;
+
+  const checkMathAnswers = (routine: Routine) => {
+    const answers = mathAnswers[routine.assignmentId] || [];
+    const results = routine.mathQuestions.map((question, index) => Number(answers[index]) === question.answer);
+    setMathResults({ ...mathResults, [routine.assignmentId]: results });
+  };
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#eff6ff,transparent_48%)] px-5 py-6 text-slate-900 sm:px-8">
@@ -186,7 +259,8 @@ export default function ChildChecklistPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               {routines.map((routine) => {
                 const progress = getRoutineProgress(routine);
-                const isComplete = progress === 100 && routine.tasks.length > 0;
+                const itemCount = routine.routine_type === "math" ? routine.mathQuestions.length : routine.tasks.length;
+                const isComplete = progress === 100 && itemCount > 0;
                 const isSelected = selectedRoutineId === routine.assignmentId;
                 return <button
                   key={routine.assignmentId}
@@ -202,7 +276,7 @@ export default function ChildChecklistPage() {
                   {routine.description && <p className="mt-2 line-clamp-2 text-sm text-slate-500">{routine.description}</p>}
                   <div className="mt-5 flex items-center justify-between text-xs font-bold uppercase tracking-wide">
                     <span className={isComplete ? "text-emerald-600" : "text-slate-500"}>{isComplete ? "Complete" : progress ? "In progress" : "Ready to start"}</span>
-                    <span className="text-slate-400">{routine.completedTaskIds.length}/{routine.tasks.length} steps</span>
+                    <span className="text-slate-400">{routine.routine_type === "math" ? `${(mathResults[routine.assignmentId] || []).filter(Boolean).length}/${routine.mathQuestions.length} correct` : `${routine.completedTaskIds.length}/${routine.tasks.length} steps`}</span>
                   </div>
                   <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full transition-all ${isComplete ? "bg-emerald-500" : "bg-blue-600"}`} style={{ width: `${progress}%` }} /></div>
                 </button>;
@@ -218,14 +292,31 @@ export default function ChildChecklistPage() {
                 <span className={`rounded-full px-3 py-1 text-xs font-bold ${getRoutineProgress(selectedRoutine) === 100 ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>{getRoutineProgress(selectedRoutine) === 100 ? "Complete" : `${getRoutineProgress(selectedRoutine)}% done`}</span>
               </div>
               {selectedRoutine.description && <p className="mt-2 text-sm text-slate-500">{selectedRoutine.description}</p>}
-              <div className="mt-6 space-y-3">{selectedRoutine.tasks.map((task) => {
+              {selectedRoutine.routine_type === "math" ? <div className="mt-6">
+                <p className="mb-4 text-sm text-slate-600">Answer every question correctly to complete this routine.</p>
+                <div className="space-y-3">{selectedRoutine.mathQuestions.map((question, index) => {
+                  const result = mathResults[selectedRoutine.assignmentId]?.[index];
+                  return <label key={question.id} className={`flex items-center gap-3 rounded-xl border-2 p-4 ${result === true ? "border-emerald-200 bg-emerald-50" : result === false ? "border-red-200 bg-red-50" : "border-slate-200"}`}>
+                    <span className="min-w-24 font-bold text-slate-900">{question.prompt} =</span>
+                    <input inputMode="numeric" value={mathAnswers[selectedRoutine.assignmentId]?.[index] || ""} onChange={(event) => {
+                      const answers = [...(mathAnswers[selectedRoutine.assignmentId] || [])];
+                      answers[index] = event.target.value;
+                      setMathAnswers({ ...mathAnswers, [selectedRoutine.assignmentId]: answers });
+                    }} className="w-24 rounded-lg border-2 border-slate-200 px-3 py-2 text-lg font-bold focus:border-blue-600 focus:outline-none" aria-label={`Answer for ${question.prompt}`} />
+                    {result === true && <span className="ml-auto font-black text-emerald-600">✓</span>}
+                    {result === false && <span className="ml-auto text-sm font-bold text-red-600">Try again</span>}
+                  </label>;
+                })}</div>
+                <button type="button" onClick={() => checkMathAnswers(selectedRoutine)} className="mt-5 rounded-lg bg-blue-600 px-5 py-3 font-bold text-white hover:bg-blue-700">Check answers</button>
+                {mathResults[selectedRoutine.assignmentId] && <p className="mt-3 font-semibold text-slate-700">{mathResults[selectedRoutine.assignmentId].filter(Boolean).length} of {selectedRoutine.mathQuestions.length} correct</p>}
+              </div> : <div className="mt-6 space-y-3">{selectedRoutine.tasks.map((task) => {
                 const isComplete = selectedRoutine.completedTaskIds.includes(task.id);
                 return <label key={task.id} className={`flex cursor-pointer items-center gap-3 rounded-xl border-2 p-4 transition ${isComplete ? "border-emerald-200 bg-emerald-50" : "border-slate-200 hover:border-blue-300"}`}>
                   <input type="checkbox" checked={isComplete} onChange={() => toggleTask(selectedRoutine, task.id)} className="h-6 w-6 accent-blue-600" />
                   <span className={isComplete ? "font-medium text-slate-500 line-through" : "font-semibold text-slate-900"}>{task.title}</span>
                   {isComplete && <span className="ml-auto text-lg font-black text-emerald-600">✓</span>}
                 </label>;
-              })}</div>
+              })}</div>}
             </article>}
           </>
         )}

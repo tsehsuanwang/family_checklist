@@ -20,6 +20,10 @@ interface Routine {
   id: string;
   name: string;
   description: string | null;
+  routine_type: "checklist" | "math";
+  math_difficulty: "grade_1" | "grade_2" | "grade_3" | "grade_4" | "grade_5" | "grade_6";
+  math_operations: string[];
+  math_question_count: number;
   tasks: Task[];
   childId: string;
   daysOfWeek: number[];
@@ -36,6 +40,21 @@ const weekdays = [
 ];
 
 const allDays = weekdays.map((day) => day.value);
+const mathOperations = [
+  { value: "addition", label: "Addition" },
+  { value: "subtraction", label: "Subtraction" },
+  { value: "multiplication", label: "Multiplication" },
+  { value: "division", label: "Division" },
+];
+
+const mathGrades = [
+  { value: "grade_1", label: "Grade 1" },
+  { value: "grade_2", label: "Grade 2" },
+  { value: "grade_3", label: "Grade 3" },
+  { value: "grade_4", label: "Grade 4" },
+  { value: "grade_5", label: "Grade 5" },
+  { value: "grade_6", label: "Grade 6" },
+];
 
 export default function RoutinesPage() {
   const router = useRouter();
@@ -44,6 +63,10 @@ export default function RoutinesPage() {
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [newRoutineName, setNewRoutineName] = useState("");
   const [newRoutineDescription, setNewRoutineDescription] = useState("");
+  const [newRoutineType, setNewRoutineType] = useState<"checklist" | "math">("checklist");
+  const [newMathDifficulty, setNewMathDifficulty] = useState<Routine["math_difficulty"]>("grade_1");
+  const [newMathOperations, setNewMathOperations] = useState(["addition"]);
+  const [newMathQuestionCount, setNewMathQuestionCount] = useState(5);
   const [newTaskNames, setNewTaskNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -90,7 +113,7 @@ export default function RoutinesPage() {
       const [{ data: childData, error: childError }, { data: routineData, error: routineError }] =
         await Promise.all([
           supabase.from("children").select("id, display_name").eq("family_id", currentFamilyId).order("sort_order"),
-          supabase.from("routines").select("id, name, description").eq("family_id", currentFamilyId).eq("is_active", true).order("created_at"),
+          supabase.from("routines").select("id, name, description, routine_type, math_difficulty, math_operations, math_question_count").eq("family_id", currentFamilyId).eq("is_active", true).order("created_at"),
         ]);
 
       if (childError || routineError) {
@@ -140,9 +163,13 @@ export default function RoutinesPage() {
         family_id: familyId,
         name: newRoutineName.trim(),
         description: newRoutineDescription.trim() || null,
+        routine_type: newRoutineType,
+        math_difficulty: newMathDifficulty,
+        math_operations: newMathOperations,
+        math_question_count: newMathQuestionCount,
         created_by: (await supabase.auth.getUser()).data.user?.id,
       })
-      .select("id, name, description")
+      .select("id, name, description, routine_type, math_difficulty, math_operations, math_question_count")
       .single();
 
     if (insertError) {
@@ -151,6 +178,10 @@ export default function RoutinesPage() {
       setRoutines([...routines, { ...data, tasks: [], childId: "", daysOfWeek: allDays }]);
       setNewRoutineName("");
       setNewRoutineDescription("");
+      setNewRoutineType("checklist");
+      setNewMathDifficulty("grade_1");
+      setNewMathOperations(["addition"]);
+      setNewMathQuestionCount(5);
     }
     setSaving(false);
   };
@@ -304,6 +335,29 @@ export default function RoutinesPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             <input value={newRoutineName} onChange={(event) => setNewRoutineName(event.target.value)} placeholder="Routine name, e.g. Morning" className="rounded-lg border-2 border-slate-200 px-4 py-2 focus:border-blue-600 focus:outline-none" required />
             <input value={newRoutineDescription} onChange={(event) => setNewRoutineDescription(event.target.value)} placeholder="Optional description" className="rounded-lg border-2 border-slate-200 px-4 py-2 focus:border-blue-600 focus:outline-none" />
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <select value={newRoutineType} onChange={(event) => setNewRoutineType(event.target.value as "checklist" | "math")} className="rounded-lg border-2 border-slate-200 px-4 py-2 focus:border-blue-600 focus:outline-none">
+              <option value="checklist">Checklist routine</option>
+              <option value="math">Math practice</option>
+            </select>
+            {newRoutineType === "math" && <>
+              <select value={newMathDifficulty} onChange={(event) => setNewMathDifficulty(event.target.value as Routine["math_difficulty"])} className="rounded-lg border-2 border-slate-200 px-4 py-2 focus:border-blue-600 focus:outline-none">
+                {mathGrades.map((grade) => <option key={grade.value} value={grade.value}>{grade.label}</option>)}
+              </select>
+              <label className="text-sm font-semibold text-slate-700">Questions
+                <input type="number" min="1" max="20" value={newMathQuestionCount} onChange={(event) => setNewMathQuestionCount(Number(event.target.value))} className="mt-1 block w-full rounded-lg border-2 border-slate-200 px-4 py-2 font-normal focus:border-blue-600 focus:outline-none" />
+              </label>
+              <fieldset className="sm:col-span-2">
+                <legend className="text-sm font-semibold text-slate-700">Operations</legend>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {mathOperations.map((operation) => {
+                    const selected = newMathOperations.includes(operation.value);
+                    return <button key={operation.value} type="button" onClick={() => setNewMathOperations(selected ? newMathOperations.filter((item) => item !== operation.value) : [...newMathOperations, operation.value])} className={`rounded-full border px-3 py-1 text-sm font-semibold ${selected ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300 text-slate-600"}`}>{operation.label}</button>;
+                  })}
+                </div>
+              </fieldset>
+            </>}
           </div>
           <button type="submit" disabled={saving || !newRoutineName.trim()} className="mt-4 rounded-lg bg-blue-600 px-5 py-2 font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{saving ? "Creating..." : "Create routine"}</button>
         </form>
