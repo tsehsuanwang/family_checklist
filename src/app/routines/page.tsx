@@ -391,11 +391,13 @@ export default function RoutinesPage() {
                     {mathGrades.map((grade) => <option key={grade.value} value={grade.value}>{grade.label}</option>)}
                   </select>
                 </label>}
-                <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-bold uppercase tracking-wide text-slate-600">Checklist steps</h3><span className="text-xs text-slate-400">{routine.tasks.length} steps</span></div>
-                <div className="space-y-2">
-                  {routine.tasks.map((task) => <div key={task.id} className="flex items-center gap-2"><input defaultValue={task.title} onBlur={(event) => updateTask(routine.id, task.id, event.target.value)} className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none" aria-label="Task title" /><button type="button" onClick={() => deleteTask(routine.id, task.id)} className="px-2 text-xs font-semibold text-red-600">Remove</button></div>)}
-                </div>
-                <form onSubmit={(event) => addTask(routine, event)} className="mt-3 flex gap-2"><input value={newTaskNames[routine.id] || ""} onChange={(event) => setNewTaskNames({ ...newTaskNames, [routine.id]: event.target.value })} placeholder="Add a checklist step" className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none" /><button type="submit" className="rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white">Add step</button></form>
+                {routine.routine_type === "checklist" && <>
+                  <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-bold uppercase tracking-wide text-slate-600">Checklist steps</h3><span className="text-xs text-slate-400">{routine.tasks.length} steps</span></div>
+                  <div className="space-y-2">
+                    {routine.tasks.map((task) => <div key={task.id} className="flex items-center gap-2"><input defaultValue={task.title} onBlur={(event) => updateTask(routine.id, task.id, event.target.value)} className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none" aria-label="Task title" /><button type="button" onClick={() => deleteTask(routine.id, task.id)} className="px-2 text-xs font-semibold text-red-600">Remove</button></div>)}
+                  </div>
+                  <form onSubmit={(event) => addTask(routine, event)} className="mt-3 flex gap-2"><input value={newTaskNames[routine.id] || ""} onChange={(event) => setNewTaskNames({ ...newTaskNames, [routine.id]: event.target.value })} placeholder="Add a checklist step" className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none" /><button type="submit" className="rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white">Add step</button></form>
+                </>}
               </div>
 
               <div className="mt-5 border-t border-slate-100 pt-4">
