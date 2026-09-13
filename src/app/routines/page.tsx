@@ -284,6 +284,29 @@ export default function RoutinesPage() {
       : routine));
   };
 
+  const moveTask = async (routine: Routine, taskIndex: number, direction: -1 | 1) => {
+    const nextIndex = taskIndex + direction;
+    if (nextIndex < 0 || nextIndex >= routine.tasks.length) return;
+
+    const currentTask = routine.tasks[taskIndex];
+    const adjacentTask = routine.tasks[nextIndex];
+    const [{ error: currentError }, { error: adjacentError }] = await Promise.all([
+      supabase.from("tasks").update({ sort_order: adjacentTask.sort_order }).eq("id", currentTask.id),
+      supabase.from("tasks").update({ sort_order: currentTask.sort_order }).eq("id", adjacentTask.id),
+    ]);
+
+    if (currentError || adjacentError) {
+      setError(currentError?.message || adjacentError?.message || "Failed to reorder tasks");
+      return;
+    }
+
+    const nextTasks = [...routine.tasks];
+    [nextTasks[taskIndex], nextTasks[nextIndex]] = [nextTasks[nextIndex], nextTasks[taskIndex]];
+    nextTasks[taskIndex] = { ...nextTasks[taskIndex], sort_order: adjacentTask.sort_order };
+    nextTasks[nextIndex] = { ...nextTasks[nextIndex], sort_order: currentTask.sort_order };
+    setRoutines((currentRoutines) => currentRoutines.map((item) => item.id === routine.id ? { ...item, tasks: nextTasks } : item));
+  };
+
   const deleteTask = async (routineId: string, taskId: string) => {
     const { error: deleteError } = await supabase.from("tasks").delete().eq("id", taskId);
     if (deleteError) {
@@ -486,7 +509,7 @@ export default function RoutinesPage() {
                 {routine.routine_type === "checklist" && <>
                   <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-bold uppercase tracking-wide text-slate-600">Checklist steps</h3><span className="text-xs text-slate-400">{routine.tasks.length} steps</span></div>
                   <div className="space-y-2">
-                    {routine.tasks.map((task) => <div key={task.id} className="flex items-center gap-2"><input defaultValue={task.title} onBlur={(event) => updateTask(routine.id, task.id, event.target.value)} className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none" aria-label="Task title" /><button type="button" onClick={() => deleteTask(routine.id, task.id)} className="px-2 text-xs font-semibold text-red-600">Remove</button></div>)}
+                    {routine.tasks.map((task, taskIndex) => <div key={task.id} className="flex items-center gap-2"><input defaultValue={task.title} onBlur={(event) => updateTask(routine.id, task.id, event.target.value)} className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none" aria-label="Task title" /><button type="button" onClick={() => moveTask(routine, taskIndex, -1)} disabled={taskIndex === 0} title="Move step up" aria-label={`Move ${task.title} up`} className="px-1 text-lg font-bold text-slate-500 disabled:cursor-not-allowed disabled:opacity-30">↑</button><button type="button" onClick={() => moveTask(routine, taskIndex, 1)} disabled={taskIndex === routine.tasks.length - 1} title="Move step down" aria-label={`Move ${task.title} down`} className="px-1 text-lg font-bold text-slate-500 disabled:cursor-not-allowed disabled:opacity-30">↓</button><button type="button" onClick={() => deleteTask(routine.id, task.id)} className="px-2 text-xs font-semibold text-red-600">Remove</button></div>)}
                   </div>
                   <form onSubmit={(event) => addTask(routine, event)} className="mt-3 flex gap-2"><input value={newTaskNames[routine.id] || ""} onChange={(event) => setNewTaskNames({ ...newTaskNames, [routine.id]: event.target.value })} placeholder="Add a checklist step" className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none" /><button type="submit" className="rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white">Add step</button></form>
                 </>}
