@@ -84,7 +84,7 @@ const createMathQuestions = (routineId: string, date: string, difficulty: Routin
 
   const selectedOperations = (operations.length ? operations : defaultsByDifficulty[difficulty]).filter(Boolean);
 
-  const getTimeQuestion = () => {
+  const getTimeQuestion = (): MathQuestion => {
     const minuteSteps = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
     const hour = next(12);
     const minutes = minuteSteps[next(minuteSteps.length) - 1];
@@ -97,7 +97,7 @@ const createMathQuestions = (routineId: string, date: string, difficulty: Routin
     };
   };
 
-  const getAreaQuestion = () => {
+  const getAreaQuestion = (): MathQuestion => {
     const isSquare = next(2) === 1;
     if (isSquare) {
       const side = next(difficulty === "grade_3" ? 12 : 9);
@@ -118,7 +118,7 @@ const createMathQuestions = (routineId: string, date: string, difficulty: Routin
     };
   };
 
-  const getPerimeterQuestion = () => {
+  const getPerimeterQuestion = (): MathQuestion => {
     const shape = ["square", "rectangle", "triangle"][next(3) - 1];
     if (shape === "square") {
       const side = next(12);
@@ -150,7 +150,7 @@ const createMathQuestions = (routineId: string, date: string, difficulty: Routin
     };
   };
 
-  const getShapeQuestion = () => {
+  const getShapeQuestion = (): MathQuestion => {
     const shapeData = [
       { name: "trapezoid", sides: 4 },
       { name: "parallelogram", sides: 4 },
