@@ -39,7 +39,7 @@ function ConfettiBurst({ active }: { active: boolean }) {
       <style>{`@keyframes confetti-pop { 0% { opacity: 0; transform: translate3d(0, 0, 0) scale(.7) rotate(0deg); } 12% { opacity: 1; } 100% { opacity: 0; transform: translate3d(var(--drift-x), -110px, 0) scale(1.1) rotate(var(--spin)); } } .confetti-piece { position: absolute; top: 22%; width: 10px; height: 16px; border-radius: 9999px; animation: confetti-pop 1.1s ease-out forwards; opacity: 0; }`}</style>
       <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
         {pieces.map((piece) => {
-          const style: CSSProperties = { left: piece.left, background: piece.color, animationDelay: piece.delay, ["--drift-x"]: `${(piece.id % 2 === 0 ? 1 : -1) * (40 + (piece.id % 5) * 14)}px`, ["--spin"]: `${(piece.id % 2 === 0 ? 1 : -1) * 220}deg` };
+          const style = { left: piece.left, background: piece.color, animationDelay: piece.delay, "--drift-x": `${(piece.id % 2 === 0 ? 1 : -1) * (40 + (piece.id % 5) * 14)}px`, "--spin": `${(piece.id % 2 === 0 ? 1 : -1) * 220}deg` } as CSSProperties;
           return <span key={piece.id} className="confetti-piece" style={style} />;
         })}
       </div>
