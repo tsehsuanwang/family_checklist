@@ -283,6 +283,7 @@ export default function ChildChecklistPage() {
 
       const loadedMathResults: Record<string, boolean[]> = {};
       (mathCompletionData || []).forEach((completion) => {
+        if (completion.completion_date !== today) return;
         const results = loadedMathResults[completion.assignment_id] || [];
         results[completion.question_index] = completion.is_correct;
         loadedMathResults[completion.assignment_id] = results;
@@ -327,7 +328,7 @@ export default function ChildChecklistPage() {
             : [],
           assignmentId: assignment.id,
           completedTaskIds: (completionData || [])
-            .filter((completion) => completion.assignment_id === assignment.id)
+            .filter((completion) => completion.assignment_id === assignment.id && completion.completion_date === today)
             .map((completion) => completion.task_id),
         }];
       }));
