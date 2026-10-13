@@ -50,6 +50,10 @@ const mathOperations = [
   { value: "subtraction", label: "Subtraction" },
   { value: "multiplication", label: "Multiplication" },
   { value: "division", label: "Division" },
+  { value: "time", label: "Time" },
+  { value: "area", label: "Area" },
+  { value: "perimeter", label: "Perimeter" },
+  { value: "shapes", label: "Shapes" },
 ];
 
 const mathGrades = [

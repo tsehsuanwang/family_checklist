@@ -13,11 +13,27 @@ interface Child {
   is_active: boolean;
 }
 
+interface FamilyStats {
+  activeChildren: number;
+  activeAssignments: number;
+  completionsToday: number;
+}
+
+const getToday = () => {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
+
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [children, setChildren] = useState<Child[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
+  const [stats, setStats] = useState<FamilyStats>({
+    activeChildren: 0,
+    activeAssignments: 0,
+    completionsToday: 0,
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -66,6 +82,35 @@ export default function DashboardPage() {
         console.error("Error loading children:", childrenError);
       } else {
         setChildren(childrenData || []);
+
+        const childIds = (childrenData || []).map((child) => child.id);
+        const [{ data: assignmentData, error: assignmentError }, { data: completionData, error: completionError }] = childIds.length
+          ? await Promise.all([
+              supabase
+                .from("routine_assignments")
+                .select("id, child_id")
+                .in("child_id", childIds)
+                .eq("is_active", true),
+              supabase
+                .from("task_completions")
+                .select("id, assignment_id")
+                .eq("completion_date", getToday()),
+            ])
+          : [{ data: [], error: null }, { data: [], error: null }];
+
+        if (assignmentError) {
+          console.error("Error loading routine assignments:", assignmentError);
+        }
+
+        if (completionError) {
+          console.error("Error loading completions:", completionError);
+        }
+
+        setStats({
+          activeChildren: new Set((assignmentData || []).map((assignment) => assignment.child_id)).size,
+          activeAssignments: (assignmentData || []).length,
+          completionsToday: (completionData || []).length,
+        });
       }
 
       setLoading(false);
@@ -144,6 +189,21 @@ export default function DashboardPage() {
           <p className="mt-4 max-w-sm text-base leading-7 text-slate-600">
             Pick your profile to see today&apos;s routines.
           </p>
+
+          <div className="mt-8 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Children</p>
+              <p className="mt-2 text-2xl font-black text-slate-950">{stats.activeChildren || children.length}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Active routines</p>
+              <p className="mt-2 text-2xl font-black text-slate-950">{stats.activeAssignments}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Check-ins today</p>
+              <p className="mt-2 text-2xl font-black text-slate-950">{stats.completionsToday}</p>
+            </div>
+          </div>
 
           <div className="mt-9 grid gap-3" role="group" aria-label="Child profiles">
             {children.length === 0 ? (

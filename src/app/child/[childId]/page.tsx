@@ -48,39 +48,92 @@ const createMathQuestions = (routineId: string, date: string, difficulty: Routin
     seed = (seed * 9301 + 49297) % 233280;
     return Math.floor((seed / 233280) * max) + 1;
   };
-  const limits = {
-    grade_1: 10,
-    grade_2: 20,
-    grade_3: 50,
-    grade_4: 100,
-    grade_5: 500,
-    grade_6: 1000,
+
+  const defaultsByDifficulty: Record<Routine["math_difficulty"], string[]> = {
+    grade_1: ["addition", "subtraction"],
+    grade_2: ["addition", "subtraction", "multiplication", "division", "time"],
+    grade_3: ["multiplication", "division", "area", "perimeter", "shapes"],
+    grade_4: ["addition", "subtraction", "multiplication", "division"],
+    grade_5: ["addition", "subtraction", "multiplication", "division"],
+    grade_6: ["addition", "subtraction", "multiplication", "division"],
   };
-  const multiplicationLimits = {
-    grade_1: 5,
-    grade_2: 10,
-    grade_3: 10,
-    grade_4: 12,
-    grade_5: 15,
-    grade_6: 20,
+
+  const selectedOperations = (operations.length ? operations : defaultsByDifficulty[difficulty]).filter(Boolean);
+
+  const getTimeQuestion = () => {
+    const minuteSteps = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+    const hour = next(12);
+    const minutes = minuteSteps[next(minuteSteps.length) - 1];
+    return {
+      id: `${routineId}-${seed}`,
+      prompt: `The clock shows ${hour}:${String(minutes).padStart(2, "0")}. How many minutes past ${hour} o'clock is it?`,
+      answer: minutes,
+    };
   };
-  const limit = limits[difficulty];
-  const multiplicationLimit = multiplicationLimits[difficulty];
+
+  const getAreaQuestion = () => {
+    const isSquare = next(2) === 1;
+    if (isSquare) {
+      const side = next(difficulty === "grade_3" ? 12 : 9);
+      return { id: `${routineId}-${seed}`, prompt: `A square has side length ${side} cm. What is its area?`, answer: side * side };
+    }
+    const width = next(difficulty === "grade_3" ? 12 : 9);
+    const height = next(difficulty === "grade_3" ? 12 : 9);
+    return { id: `${routineId}-${seed}`, prompt: `A rectangle is ${width} cm long and ${height} cm wide. What is its area?`, answer: width * height };
+  };
+
+  const getPerimeterQuestion = () => {
+    const shape = ["square", "rectangle", "triangle"][next(3) - 1];
+    if (shape === "square") {
+      const side = next(12);
+      return { id: `${routineId}-${seed}`, prompt: `A square has side length ${side} cm. What is its perimeter?`, answer: side * 4 };
+    }
+    if (shape === "rectangle") {
+      const width = next(12);
+      const height = next(12);
+      return { id: `${routineId}-${seed}`, prompt: `A rectangle is ${width} cm long and ${height} cm wide. What is its perimeter?`, answer: (width * 2) + (height * 2) };
+    }
+    const sideA = next(12);
+    const sideB = next(12);
+    const sideC = next(12);
+    return { id: `${routineId}-${seed}`, prompt: `A triangle has side lengths ${sideA} cm, ${sideB} cm, and ${sideC} cm. What is its perimeter?`, answer: sideA + sideB + sideC };
+  };
+
+  const getShapeQuestion = () => {
+    const shapeData = [
+      { name: "trapezoid", sides: 4 },
+      { name: "parallelogram", sides: 4 },
+      { name: "pentagon", sides: 5 },
+      { name: "hexagon", sides: 6 },
+    ];
+    const shape = shapeData[next(shapeData.length) - 1];
+    return { id: `${routineId}-${seed}`, prompt: `A ${shape.name} has how many sides?`, answer: shape.sides };
+  };
 
   return Array.from({ length: count }, (_, index) => {
-    const operation = operations[index % operations.length];
+    const operation = selectedOperations[index % selectedOperations.length];
+
+    if (operation === "time") return getTimeQuestion();
+    if (operation === "area") return getAreaQuestion();
+    if (operation === "perimeter") return getPerimeterQuestion();
+    if (operation === "shapes") return getShapeQuestion();
+
+    const multiplicationLimit = difficulty === "grade_2" ? 5 : difficulty === "grade_3" ? 10 : 12;
+    const divisionLimit = difficulty === "grade_2" ? 3 : difficulty === "grade_3" ? 5 : 10;
+
     if (operation === "multiplication") {
       const left = next(multiplicationLimit);
       const right = next(multiplicationLimit);
       return { id: `${routineId}-${index}`, prompt: `${left} x ${right}`, answer: left * right };
     }
     if (operation === "division") {
-      const divisor = next(multiplicationLimit);
-      const answer = next(multiplicationLimit);
-      return { id: `${routineId}-${index}`, prompt: `${divisor * answer} ÷ ${divisor}`, answer };
+      const divisor = next(divisionLimit);
+      const result = next(difficulty === "grade_2" ? 10 : divisionLimit + 4);
+      return { id: `${routineId}-${index}`, prompt: `${divisor * result} ÷ ${divisor}`, answer: result };
     }
-    const left = next(limit);
-    const right = next(limit);
+
+    const left = next(difficulty === "grade_2" ? 999 : 99);
+    const right = next(difficulty === "grade_2" ? 999 : 99);
     if (operation === "subtraction") {
       const larger = Math.max(left, right);
       const smaller = Math.min(left, right);
