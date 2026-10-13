@@ -32,7 +32,24 @@ interface Routine {
 interface MathQuestion {
   id: string;
   prompt: string;
-  answer: number;
+  answer: number | string;
+  visual?: {
+    type: "clock" | "square" | "rectangle" | "triangle" | "shape";
+    hour?: number;
+    minutes?: number;
+    width?: number;
+    height?: number;
+    side?: number;
+    sides?: number;
+    name?: string;
+  };
+}
+
+interface WeeklyReportDay {
+  date: string;
+  label: string;
+  completed: number;
+  expected: number;
 }
 
 const getToday = () => {
@@ -40,6 +57,13 @@ const getToday = () => {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${date.getFullYear()}-${month}-${day}`;
+};
+
+const getDateDaysAgo = (daysAgo: number) => {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() - daysAgo);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 };
 
 const createMathQuestions = (routineId: string, date: string, difficulty: Routine["math_difficulty"], operations: string[], count: number): MathQuestion[] => {
@@ -64,10 +88,12 @@ const createMathQuestions = (routineId: string, date: string, difficulty: Routin
     const minuteSteps = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
     const hour = next(12);
     const minutes = minuteSteps[next(minuteSteps.length) - 1];
+    const timeString = `${hour}:${String(minutes).padStart(2, "0")}`;
     return {
       id: `${routineId}-${seed}`,
-      prompt: `The clock shows ${hour}:${String(minutes).padStart(2, "0")}. How many minutes past ${hour} o'clock is it?`,
-      answer: minutes,
+      prompt: `What time does the clock show?`,
+      answer: timeString,
+      visual: { type: "clock", hour, minutes },
     };
   };
 
@@ -75,28 +101,53 @@ const createMathQuestions = (routineId: string, date: string, difficulty: Routin
     const isSquare = next(2) === 1;
     if (isSquare) {
       const side = next(difficulty === "grade_3" ? 12 : 9);
-      return { id: `${routineId}-${seed}`, prompt: `A square has side length ${side} cm. What is its area?`, answer: side * side };
+      return {
+        id: `${routineId}-${seed}`,
+        prompt: `A square has side length ${side} cm. What is its area?`,
+        answer: side * side,
+        visual: { type: "square", side },
+      };
     }
     const width = next(difficulty === "grade_3" ? 12 : 9);
     const height = next(difficulty === "grade_3" ? 12 : 9);
-    return { id: `${routineId}-${seed}`, prompt: `A rectangle is ${width} cm long and ${height} cm wide. What is its area?`, answer: width * height };
+    return {
+      id: `${routineId}-${seed}`,
+      prompt: `A rectangle is ${width} cm long and ${height} cm wide. What is its area?`,
+      answer: width * height,
+      visual: { type: "rectangle", width, height },
+    };
   };
 
   const getPerimeterQuestion = () => {
     const shape = ["square", "rectangle", "triangle"][next(3) - 1];
     if (shape === "square") {
       const side = next(12);
-      return { id: `${routineId}-${seed}`, prompt: `A square has side length ${side} cm. What is its perimeter?`, answer: side * 4 };
+      return {
+        id: `${routineId}-${seed}`,
+        prompt: `A square has side length ${side} cm. What is its perimeter?`,
+        answer: side * 4,
+        visual: { type: "square", side },
+      };
     }
     if (shape === "rectangle") {
       const width = next(12);
       const height = next(12);
-      return { id: `${routineId}-${seed}`, prompt: `A rectangle is ${width} cm long and ${height} cm wide. What is its perimeter?`, answer: (width * 2) + (height * 2) };
+      return {
+        id: `${routineId}-${seed}`,
+        prompt: `A rectangle is ${width} cm long and ${height} cm wide. What is its perimeter?`,
+        answer: (width * 2) + (height * 2),
+        visual: { type: "rectangle", width, height },
+      };
     }
     const sideA = next(12);
     const sideB = next(12);
     const sideC = next(12);
-    return { id: `${routineId}-${seed}`, prompt: `A triangle has side lengths ${sideA} cm, ${sideB} cm, and ${sideC} cm. What is its perimeter?`, answer: sideA + sideB + sideC };
+    return {
+      id: `${routineId}-${seed}`,
+      prompt: `A triangle has side lengths ${sideA} cm, ${sideB} cm, and ${sideC} cm. What is its perimeter?`,
+      answer: sideA + sideB + sideC,
+      visual: { type: "triangle", side: sideA },
+    };
   };
 
   const getShapeQuestion = () => {
@@ -107,7 +158,12 @@ const createMathQuestions = (routineId: string, date: string, difficulty: Routin
       { name: "hexagon", sides: 6 },
     ];
     const shape = shapeData[next(shapeData.length) - 1];
-    return { id: `${routineId}-${seed}`, prompt: `A ${shape.name} has how many sides?`, answer: shape.sides };
+    return {
+      id: `${routineId}-${seed}`,
+      prompt: `A ${shape.name} has how many sides?`,
+      answer: shape.sides,
+      visual: { type: "shape", name: shape.name, sides: shape.sides },
+    };
   };
 
   return Array.from({ length: count }, (_, index) => {
@@ -143,6 +199,76 @@ const createMathQuestions = (routineId: string, date: string, difficulty: Routin
   });
 };
 
+const renderMathVisual = (visual?: MathQuestion["visual"]) => {
+  if (!visual) return null;
+
+  const commonSvgProps = { width: 88, height: 88, viewBox: "0 0 100 100", className: "h-16 w-16" };
+
+  if (visual.type === "clock") {
+    const hourAngle = ((visual.hour ?? 12) / 12) * 360 - 90;
+    const minuteAngle = ((visual.minutes ?? 0) / 60) * 360 - 90;
+    const hourX = 50 + Math.cos((hourAngle * Math.PI) / 180) * 18;
+    const hourY = 50 + Math.sin((hourAngle * Math.PI) / 180) * 18;
+    const minuteX = 50 + Math.cos((minuteAngle * Math.PI) / 180) * 30;
+    const minuteY = 50 + Math.sin((minuteAngle * Math.PI) / 180) * 30;
+    return (
+      <svg {...commonSvgProps}>
+        <circle cx="50" cy="50" r="38" fill="white" stroke="#cbd5e1" strokeWidth="2" />
+        {[...Array(12)].map((_, index) => { const angle = (index / 12) * Math.PI * 2 - Math.PI / 2; const innerX = 50 + Math.cos(angle) * 28; const innerY = 50 + Math.sin(angle) * 28; const outerX = 50 + Math.cos(angle) * 34; const outerY = 50 + Math.sin(angle) * 34; return <line key={index} x1={innerX} y1={innerY} x2={outerX} y2={outerY} stroke="#94a3b8" strokeWidth="2" />; })}
+        <line x1="50" y1="50" x2={hourX} y2={hourY} stroke="#2563eb" strokeWidth="4" strokeLinecap="round" />
+        <line x1="50" y1="50" x2={minuteX} y2={minuteY} stroke="#0f172a" strokeWidth="3" strokeLinecap="round" />
+        <circle cx="50" cy="50" r="4" fill="#0f172a" />
+      </svg>
+    );
+  }
+
+  if (visual.type === "square") {
+    return (
+      <svg {...commonSvgProps}>
+        <rect x="18" y="18" width="64" height="64" rx="4" fill="#dbeafe" stroke="#2563eb" strokeWidth="3" />
+        <text x="50" y="54" textAnchor="middle" fontSize="12" fill="#0f172a" fontWeight="700">{visual.side ?? 0}</text>
+      </svg>
+    );
+  }
+
+  if (visual.type === "rectangle") {
+    const width = Math.max(32, (visual.width ?? 4) * 4);
+    const height = Math.max(24, (visual.height ?? 3) * 4);
+    const x = 50 - width / 2;
+    const y = 50 - height / 2;
+    return (
+      <svg {...commonSvgProps}>
+        <rect x={x} y={y} width={width} height={height} rx="4" fill="#dcfce7" stroke="#16a34a" strokeWidth="3" />
+        <text x="50" y="54" textAnchor="middle" fontSize="11" fill="#0f172a" fontWeight="700">{visual.width} × {visual.height}</text>
+      </svg>
+    );
+  }
+
+  if (visual.type === "triangle") {
+    return (
+      <svg {...commonSvgProps}>
+        <polygon points="50,16 18,76 82,76" fill="#fef3c7" stroke="#d97706" strokeWidth="3" />
+        <text x="50" y="52" textAnchor="middle" fontSize="12" fill="#0f172a" fontWeight="700">△</text>
+      </svg>
+    );
+  }
+
+  const sides = visual.sides ?? 4;
+  const points = Array.from({ length: sides }, (_, index) => {
+    const angle = (Math.PI * 2 * index) / sides - Math.PI / 2;
+    const x = 50 + Math.cos(angle) * 30;
+    const y = 50 + Math.sin(angle) * 30;
+    return `${x},${y}`;
+  }).join(" ");
+
+  return (
+    <svg {...commonSvgProps}>
+      <polygon points={points} fill="#f3e8ff" stroke="#7c3aed" strokeWidth="3" />
+      <text x="50" y="54" textAnchor="middle" fontSize="10" fill="#0f172a" fontWeight="700">{visual.name ?? sides}</text>
+    </svg>
+  );
+};
+
 export default function ChildChecklistPage() {
   const params = useParams<{ childId: string }>();
   const router = useRouter();
@@ -150,6 +276,7 @@ export default function ChildChecklistPage() {
   const [child, setChild] = useState<Child | null>(null);
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [mathResults, setMathResults] = useState<Record<string, boolean[]>>({});
+  const [weeklyReport, setWeeklyReport] = useState<WeeklyReportDay[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -195,18 +322,27 @@ export default function ChildChecklistPage() {
         const scheduledToday = (assignment.days_of_week || []).includes(dayOfWeek);
         return starts && ends && scheduledToday;
       });
-      const routineIds = activeAssignments.map((assignment) => assignment.routine_id);
+      const routineIds = (assignments || []).map((assignment) => assignment.routine_id);
 
       if (routineIds.length === 0) {
+        setWeeklyReport(Array.from({ length: 7 }, (_, index) => ({
+          date: getDateDaysAgo(6 - index),
+          label: new Date(`${getDateDaysAgo(6 - index)}T00:00:00`).toLocaleDateString(undefined, { weekday: "short" }),
+          completed: 0,
+          expected: 0,
+        })));
         setLoading(false);
         return;
       }
 
+      const weekStart = getDateDaysAgo(6);
+      const todayDate = getToday();
+
       const [{ data: routineData, error: routineError }, { data: taskData, error: taskError }, { data: completionData, error: completionError }, { data: mathCompletionData, error: mathCompletionError }] = await Promise.all([
         supabase.from("routines").select("id, name, description, routine_type, math_difficulty, math_operations, math_question_count").in("id", routineIds).eq("is_active", true),
         supabase.from("tasks").select("id, routine_id, title, sort_order").in("routine_id", routineIds).order("sort_order"),
-        supabase.from("task_completions").select("assignment_id, task_id").eq("completion_date", today),
-        supabase.from("math_completions").select("assignment_id, question_index, is_correct").eq("completion_date", today),
+        supabase.from("task_completions").select("assignment_id, task_id, completion_date").gte("completion_date", weekStart).lte("completion_date", todayDate),
+        supabase.from("math_completions").select("assignment_id, question_index, is_correct, completion_date").gte("completion_date", weekStart).lte("completion_date", todayDate),
       ]);
 
       if (routineError || taskError || completionError || mathCompletionError) {
@@ -222,6 +358,33 @@ export default function ChildChecklistPage() {
         loadedMathResults[completion.assignment_id] = results;
       });
       setMathResults(loadedMathResults);
+
+      const report = Array.from({ length: 7 }, (_, index) => {
+        const date = getDateDaysAgo(6 - index);
+        const dateObject = new Date(`${date}T00:00:00`);
+        const scheduledAssignments = (assignments || []).filter((assignment) => {
+          const starts = assignment.starts_on <= date;
+          const ends = !assignment.ends_on || assignment.ends_on >= date;
+          return starts && ends && (assignment.days_of_week || []).includes(dateObject.getDay());
+        });
+        const scheduledIds = new Set(scheduledAssignments.map((assignment) => assignment.id));
+        const expected = scheduledAssignments.reduce((total, assignment) => {
+          const routine = (routineData || []).find((item) => item.id === assignment.routine_id);
+          if (!routine) return total;
+          return total + (routine.routine_type === "math"
+            ? routine.math_question_count
+            : (taskData || []).filter((task) => task.routine_id === routine.id).length);
+        }, 0);
+        const completedTasksForDay = (completionData || []).filter((completion) => completion.completion_date === date && scheduledIds.has(completion.assignment_id));
+        const completedMathForDay = (mathCompletionData || []).filter((completion) => completion.completion_date === date && completion.is_correct && scheduledIds.has(completion.assignment_id));
+        return {
+          date,
+          label: dateObject.toLocaleDateString(undefined, { weekday: "short" }),
+          completed: completedTasksForDay.length + completedMathForDay.length,
+          expected,
+        };
+      });
+      setWeeklyReport(report);
 
       setRoutines(activeAssignments.flatMap((assignment) => {
         const routine = (routineData || []).find((item) => item.id === assignment.routine_id);
@@ -251,6 +414,7 @@ export default function ChildChecklistPage() {
   const totalTasks = routines.reduce((total, routine) => total + (routine.routine_type === "math" ? routine.mathQuestions.length : routine.tasks.length), 0);
   const completedTasks = routines.reduce((total, routine) => total + (routine.routine_type === "math" ? (mathResults[routine.assignmentId] || []).filter(Boolean).length : routine.completedTaskIds.length), 0);
   const overallProgress = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
+  const perfectWeek = weeklyReport.length === 7 && weeklyReport.every((day) => day.expected > 0 && day.completed >= day.expected);
 
   const getMathProgress = (routine: Routine) => {
     const results = mathResults[routine.assignmentId] || [];
@@ -281,11 +445,42 @@ export default function ChildChecklistPage() {
 
         {error && <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
+        <section className={`mb-8 rounded-2xl border p-5 shadow-sm sm:p-6 ${perfectWeek ? "border-emerald-300 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+              <div className="flex items-end justify-between gap-4">
+                <div>
+              <p className={`text-sm font-bold uppercase tracking-[0.18em] ${perfectWeek ? "text-emerald-700" : "text-amber-700"}`}>{perfectWeek ? "Amazing achievement" : "Your week in a glance"}</p>
+              <h2 className="mt-1 text-2xl font-black text-slate-950">{perfectWeek ? "A perfect week!" : "Seven days of small wins"}</h2>
+                </div>
+            <span className="text-3xl" aria-hidden="true">{perfectWeek ? "🏆" : "★"}</span>
+              </div>
+              <div className="mt-5 grid grid-cols-7 gap-2">
+                {weeklyReport.map((day) => {
+                  const percent = day.expected ? Math.round((day.completed / day.expected) * 100) : 0;
+                  const complete = day.expected > 0 && percent === 100;
+                  return (
+                    <div key={day.date} className="text-center">
+                      <div className="flex h-24 flex-col justify-end overflow-hidden rounded-xl bg-white/80 p-1">
+                        <div className={`min-h-2 rounded-lg transition-all ${complete ? "bg-emerald-400" : "bg-amber-400"}`} style={{ height: `${Math.max(percent, day.expected ? 10 : 2)}%` }} />
+                      </div>
+                      <p className="mt-2 text-xs font-black text-slate-700">{day.label}</p>
+                      <p className="text-[10px] font-semibold text-slate-500">{day.expected ? `${percent}%` : "—"}</p>
+                    </div>
+                  );
+                })}
+              </div>
+              {perfectWeek ? (
+                <p className="mt-4 text-sm font-black text-emerald-800">Congratulations! You earned 100% every day this week!</p>
+              ) : weeklyReport.some((day) => day.completed > 0) ? (
+                <p className="mt-4 text-sm font-semibold text-amber-900">You completed {weeklyReport.reduce((total, day) => total + day.completed, 0)} steps this week. Keep your streak going!</p>
+              ) : (
+                <p className="mt-4 text-sm font-semibold text-amber-900">Your first win of the week is waiting for you.</p>
+              )}
+        </section>
+
         {routines.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-slate-500">No routines are scheduled for today.</div>
         ) : (
-          <>
-            <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
               {routines.map((routine) => {
                 const progress = getRoutineProgress(routine);
                 const itemCount = routine.routine_type === "math" ? routine.mathQuestions.length : routine.tasks.length;
@@ -308,9 +503,7 @@ export default function ChildChecklistPage() {
                   <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full transition-all ${isComplete ? "bg-emerald-500" : "bg-blue-600"}`} style={{ width: `${progress}%` }} /></div>
                 </button>;
               })}
-            </div>
-
-          </>
+          </div>
         )}
       </div>
     </main>
